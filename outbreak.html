@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Outbreak Iowa</title>
+<style>
+  :root {
+    --ink: #eef3ff; --dim: rgba(238, 243, 255, 0.62);
+    --glass: rgba(12, 20, 42, 0.72); --edge: rgba(140, 180, 255, 0.2);
+    --red: #ff3b4e; --cyan: #5fe3ff; --green: #7be0a6; --sus: #9fb6e0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(ellipse at 40% 45%, #0b1838 0%, #050a1a 55%, #02040b 100%);
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #app {
+    position: fixed; inset: 0; display: grid;
+    grid-template-columns: 1fr clamp(300px, 27vw, 380px); grid-template-rows: auto 1fr;
+    grid-template-areas: "top side" "map side"; gap: 10px 18px;
+    padding: max(14px, env(safe-area-inset-top)) 18px max(14px, env(safe-area-inset-bottom)) 20px;
+  }
+  #top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: clamp(18px, 2.2vw, 28px); font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; }
+  h1 b { font-weight: 800; color: var(--red); text-shadow: 0 0 16px rgba(255, 59, 78, 0.7); }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stat { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 14px; min-width: 104px; }
+  .lbl { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+  .num { font-size: clamp(19px, 1.9vw, 26px); font-weight: 300; font-variant-numeric: tabular-nums; }
+  #mapWrap { grid-area: map; position: relative; min-height: 0; }
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  #legend { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 14px; font-size: 13px; color: var(--dim); flex-wrap: wrap; pointer-events: none; }
+  #legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  #banner {
+    position: absolute; left: 50%; top: 8px; transform: translateX(-50%); max-width: 92%;
+    background: rgba(10, 18, 40, 0.92); border: 1px solid var(--edge); border-radius: 16px; padding: 12px 18px;
+    font-size: 16px; line-height: 1.45; text-align: center; transition: opacity 0.4s; pointer-events: none;
+  }
+  #banner.hide { opacity: 0; }
+
+  #side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; padding: 14px 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .diseases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  .diseases button { border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,0.04); padding: 9px 4px; font-size: 13px; line-height: 1.25; }
+  .diseases button b { display: block; font-size: 14px; }
+  .diseases button span { color: var(--dim); font-size: 11.5px; }
+  .diseases button.on { border-color: var(--red); background: rgba(255, 59, 78, 0.16); }
+  .hint { font-size: 12.5px; color: var(--dim); line-height: 1.45; margin-top: 8px; }
+  .vax { display: flex; align-items: baseline; justify-content: space-between; }
+  #vaxVal { font-size: 34px; font-weight: 200; color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .track { position: relative; margin-top: 6px; }
+  #vax { width: 100%; accent-color: var(--cyan); height: 34px; }
+  #tip { position: absolute; top: -6px; width: 2px; height: 46px; background: #ffd35f; box-shadow: 0 0 8px #ffd35f; display: none; pointer-events: none; }
+  #tipLbl { position: absolute; top: 40px; transform: translateX(-50%); font-size: 11px; color: #ffd35f; white-space: nowrap; display: none; }
+  .go {
+    width: 100%; padding: 16px; border-radius: 14px; font-size: 18px; font-weight: 800; letter-spacing: 0.05em;
+    border: 1px solid rgba(255, 160, 170, 0.6); background: linear-gradient(180deg, #ff4258, #b3101f);
+    box-shadow: 0 0 26px rgba(255, 50, 70, 0.4);
+  }
+  .go:disabled { opacity: 0.45; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ghost { padding: 11px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,0.05); font-size: 14px; }
+  #curve { width: 100%; height: 130px; display: block; margin-top: 6px; }
+  #runs div { font-size: 13px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--dim); display: flex; gap: 8px; align-items: center; }
+  #runs div b { color: var(--ink); }
+  #runs i { width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+  .foot { font-size: 11.5px; color: var(--dim); line-height: 1.45; }
+  .foot a { color: inherit; }
+  @media (orientation: portrait), (max-width: 860px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "top" "map" "side"; }
+    #side { max-height: 42vh; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <h1>Outbreak <b>Iowa</b></h1>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Sick now</div><div class="num" id="sNow" style="color:var(--red)">0</div></div>
+      <div class="stat"><div class="lbl">Total got sick</div><div class="num" id="sTot">0</div></div>
+      <div class="stat"><div class="lbl">Protected</div><div class="num" id="sVax" style="color:var(--cyan)">0</div></div>
+      <div class="stat"><div class="lbl">Counties hit</div><div class="num"><span id="sCty">0</span><span style="font-size:13px;color:var(--dim)"> / 99</span></div></div>
+    </div>
+  </div>
+
+  <div id="mapWrap">
+    <canvas id="map"></canvas>
+    <div id="banner">Pick a disease, set how many people are vaccinated, then <b>tap any county</b> to start an outbreak there.</div>
+    <div id="legend">
+      <span><i style="background:var(--sus)"></i>Can catch it</span>
+      <span><i style="background:var(--red);box-shadow:0 0 8px var(--red)"></i>Sick</span>
+      <span><i style="background:var(--green);opacity:.6"></i>Recovered</span>
+      <span><i style="background:var(--cyan)"></i>Vaccinated</span>
+    </div>
+  </div>
+
+  <aside id="side">
+    <div class="card">
+      <div class="lbl">1 · Choose a disease</div>
+      <div class="diseases" id="diseases"></div>
+      <div class="hint"><b style="color:var(--ink)">R₀</b> (“R-naught”) is how many people one sick person infects when <i>nobody</i> is immune.</div>
+    </div>
+    <div class="card">
+      <div class="vax"><div class="lbl">2 · Vaccinated</div><div id="vaxVal">50%</div></div>
+      <div class="track"><input type="range" id="vax" min="0" max="99" value="50" aria-label="Percent vaccinated"><div id="tip"></div><div id="tipLbl"></div></div>
+      <div class="hint" id="tipText" style="margin-top:18px">Is there a tipping point where the outbreak can’t spread? Try different values and find out.</div>
+    </div>
+    <button class="go" id="go">3 · Release outbreak ▸</button>
+    <div class="row2">
+      <button class="ghost" id="showTip">💡 Show tipping point</button>
+      <button class="ghost" id="clear">↺ Clear runs</button>
+    </div>
+    <div class="card">
+      <div class="lbl">Epidemic curve · people sick over time</div>
+      <canvas id="curve"></canvas>
+      <div id="runs"></div>
+    </div>
+    <div class="foot">
+      Simplified agent-based <b>SIR model</b> (Susceptible → Infected → Recovered), the same idea epidemiologists use.
+      R₀ values are approximate textbook figures; vaccines are treated as 100% effective; dots are spread evenly, not by real population.
+      <a href="index.html" style="display:block;margin-top:6px">⌂ All demos</a>
+    </div>
+  </aside>
+</div>
+
+<script>
+const IOWA={"W":1000,"H":647,"milesPerPx":0.3329,"cities":{"Des Moines":[464,396],"Sioux City":[35.9,207.4],"Council Bluffs":[119.1,464.4],"Cedar Rapids":[764.4,315.2],"Davenport":[932.2,410.5],"Dubuque":[919.9,207.4],"Mason City":[528.7,72.7],"Iowa City":[785.9,381.5],"Ames":[464,304.9],"Waterloo":[661.2,209.5]},"counties":[{"n":"Adair","d":"M297.4,413.8L368.2,413.9L368.2,485.7L332.8,485.7L297.4,485.5L298,449.7L297.4,413.8Z","x":333,"y":449.8,"a":5062},{"n":"Adams","d":"M262.6,485.5L297.4,485.5L332.8,485.7L332.8,539.1L262.6,538.9L262.6,485.5Z","x":297.7,"y":512.3,"a":3752},{"n":"Allamakee","d":"M773.4,0.2L834.2,0.2L831.4,9.4L835.8,16.2L836.4,31.5L851.3,38.8L858.5,52.3L848.5,63L845.2,72.3L840.2,76.6L840.2,87.2L774.5,86.9L773.4,32.9L773.4,0.2Z","x":809,"y":45,"a":6036},{"n":"Appanoose","d":"M544.5,539.4L615.3,539.3L615.3,603.2L603.6,603.4L544.5,604.6L544.5,539.4Z","x":579.8,"y":571.6,"a":4569},{"n":"Audubon","d":"M237.1,339.3L290.8,339.5L290.8,393.5L297.4,393.5L297.4,413.8L245.4,413.8L245.4,393.5L237.1,393.5L237.1,339.3Z","x":265.9,"y":376.4,"a":3961},{"n":"Benton","d":"M667.8,249.4L703.7,249.4L739.6,249.1L739.1,321.5L739.6,339.7L667.8,339.5L667.8,249.4Z","x":703.6,"y":294.4,"a":6459},{"n":"Black Hawk","d":"M628,178L700.9,178L700.9,214L703.7,214L703.7,249.4L667.8,249.4L631.3,249.6L631.3,213.8L628,213.8L628,195.8L628,178Z","x":665.9,"y":213.7,"a":5190},{"n":"Boone","d":"M380.3,267.6L416.3,267.6L452.2,267.8L452.2,339.3L433.9,339.3L380.3,339.3L380.3,267.6Z","x":416.2,"y":303.5,"a":5152},{"n":"Bremer","d":"M628,123L700.9,123L700.9,178L628,178L628,123Z","x":664.5,"y":150.5,"a":4010},{"n":"Buchanan","d":"M700.9,178L773.9,177.7L773.9,213.8L775.6,213.8L775.6,249.6L739.6,249.1L703.7,249.4L703.7,214L700.9,214L700.9,178Z","x":738.5,"y":213.4,"a":5177},{"n":"Buena Vista","d":"M191.8,122.5L264.8,122.5L264.8,194.9L191.8,194.6L191.8,122.5Z","x":228.3,"y":158.6,"a":5274},{"n":"Butler","d":"M555.6,123L628,123L628,178L628,195.8L555.6,195.7L555.6,123Z","x":591.8,"y":159.4,"a":5267},{"n":"Calhoun","d":"M264.8,194.9L337.2,195.3L337.2,212.9L344.4,212.9L344.4,267.8L308.5,267.6L273.1,267.6L273.6,212.8L264.8,212.8L264.8,194.9Z","x":306.9,"y":231.3,"a":5178},{"n":"Carroll","d":"M237.7,267.4L273.1,267.6L308.5,267.6L308.5,339.5L290.8,339.5L237.1,339.3L237.7,267.4Z","x":273,"y":303.5,"a":5110},{"n":"Cass","d":"M227.8,413.6L245.4,413.8L297.4,413.8L298,449.7L297.4,485.5L262.6,485.5L227.8,485.3L227.8,413.6Z","x":262.8,"y":449.6,"a":5010},{"n":"Cedar","d":"M810.9,340L810.9,321.9L883.4,322.2L883.4,358.4L882.8,394.5L810.9,394.3L810.9,340Z","x":847.1,"y":358.2,"a":5235},{"n":"Cerro Gordo","d":"M483.1,50.9L555.6,50.9L555.6,59.6L555.6,123L482.6,122.8L483.1,50.9Z","x":519.2,"y":86.9,"a":5238},{"n":"Cherokee","d":"M119.4,122.7L191.8,122.5L191.8,194.6L137.1,194.8L118.9,194.9L119.4,122.7Z","x":155.5,"y":158.7,"a":5241},{"n":"Chickasaw","d":"M628,59.6L700.9,59.6L700.9,86.7L700.9,123L628,123L628,59.6Z","x":664.4,"y":91.3,"a":4622},{"n":"Clarke","d":"M403.5,485.9L437.8,484.8L473.7,485L473.7,539.4L403,539.6L403.5,485.9Z","x":438.5,"y":512.3,"a":3831},{"n":"Clay","d":"M191.8,50.9L264.8,50.9L264.8,122.5L191.8,122.5L191.8,50.9Z","x":228.3,"y":86.7,"a":5227},{"n":"Clayton","d":"M774.5,86.9L840.2,87.2L843.6,106.3L845.2,123.6L851.9,128L857.4,155.4L870.6,166.3L883.4,171.1L883.4,177.3L846.9,177.1L773.9,177.7L774.5,86.9Z","x":815,"y":136,"a":7202},{"n":"Clinton","d":"M883.4,304.1L997.8,304.3L1000,309.2L996.1,320.1L998.3,325.8L993.4,343.2L993.9,350.5L984,356.1L972.9,367.3L958.5,367.1L949.1,358L938.6,357.5L932.6,361.1L917.6,360.5L911.6,366L900.5,358.4L883.4,358.4L883.4,322.2L883.4,304.1Z","x":939.8,"y":332.3,"a":6368},{"n":"Crawford","d":"M148.1,267.2L201.8,267.4L237.7,267.4L237.1,339.3L165.8,339.3L148.1,339.5L148.1,267.2Z","x":192.7,"y":303.3,"a":6428},{"n":"Dallas","d":"M362.1,339.5L380.3,339.3L433.9,339.3L433.9,393.8L437.8,393.8L437.8,412.1L421.2,414.1L368.2,413.9L368.2,393.8L362.6,393.6L362.1,339.5Z","x":399.3,"y":376.3,"a":5288},{"n":"Davis","d":"M615.3,539.3L686,539.1L686,601L659.5,601.8L615.3,603.2L615.3,539.3Z","x":650.5,"y":570.6,"a":4446},{"n":"Decatur","d":"M403,539.6L473.7,539.4L473.7,605.3L440,605.8L403,606.6L403,539.6Z","x":438.3,"y":572.7,"a":4694},{"n":"Delaware","d":"M773.9,177.7L846.9,177.1L847.4,249.8L811.5,249.6L775.6,249.6L775.6,213.8L773.9,213.8L773.9,177.7Z","x":811,"y":213.4,"a":5231},{"n":"Des Moines","d":"M810.4,502.9L875.6,503.3L875.6,503.8L876.2,515.8L872.9,534.6L866.8,538L859,549.8L853.5,554.6L850.2,581.3L824.2,569.5L822.6,565.4L804.3,557.1L810.4,557.1L810.4,502.9Z","x":839.7,"y":534.2,"a":3791},{"n":"Dickinson","d":"M191.8,0.2L264.8,0.2L264.8,50.9L191.8,50.9L191.8,0.2Z","x":228.3,"y":25.6,"a":3701},{"n":"Dubuque","d":"M846.9,177.1L883.4,177.3L883.4,171.1L912.7,179.6L922.6,199L922.6,205.6L922.6,214L934.8,220.2L935.9,224.9L948.6,232L919.3,231.8L919.3,250L883.4,250L847.4,249.8L846.9,177.1Z","x":885.7,"y":214,"a":5598},{"n":"Emmet","d":"M264.8,0.2L274.2,0L337.2,0L337.2,50.9L264.8,50.9L264.8,0.2Z","x":301,"y":25.5,"a":3684},{"n":"Fayette","d":"M700.9,123L700.9,86.7L774.5,86.9L773.9,177.7L700.9,178L700.9,123Z","x":737.5,"y":132.3,"a":6674},{"n":"Floyd","d":"M555.6,59.6L628,59.6L628,123L555.6,123L555.6,59.6Z","x":591.8,"y":91.3,"a":4590},{"n":"Franklin","d":"M482.6,122.8L555.6,123L555.6,195.7L482.6,195.5L482.6,122.8Z","x":519.1,"y":159.3,"a":5307},{"n":"Fremont","d":"M123.3,563.1L121.1,557.4L122.2,544.8L126,538.7L192.4,538.7L192.4,574.5L194.6,574.7L194,605.3L133.8,604.2L136,599.3L130.5,589.3L123.3,586.4L115,576.1L116.1,569.5L123.3,563.1Z","x":158.3,"y":571,"a":4588},{"n":"Greene","d":"M308.5,267.6L344.4,267.8L380.3,267.6L380.3,339.3L362.1,339.5L308.5,339.5L308.5,267.6Z","x":344.4,"y":303.6,"a":5153},{"n":"Grundy","d":"M555.6,195.7L628,195.8L628,213.8L631.3,213.8L631.3,249.6L595.4,249.6L595.4,267.6L559.4,267.8L558.9,213.5L555.6,213.5L555.6,195.7Z","x":591.6,"y":227.8,"a":4545},{"n":"Guthrie","d":"M290.8,339.5L308.5,339.5L362.1,339.5L362.6,393.6L368.2,393.8L368.2,413.9L297.4,413.8L297.4,393.5L290.8,393.5L290.8,339.5Z","x":328.3,"y":376.6,"a":5303},{"n":"Hamilton","d":"M410.2,195.5L482.6,195.5L482.6,213.5L488.1,213.5L488.1,267.8L452.2,267.8L416.3,267.6L416.3,213.3L409.6,213.3L410.2,195.5Z","x":450.7,"y":231.5,"a":5202},{"n":"Hancock","d":"M410.2,50.9L483.1,50.9L482.6,122.8L410.2,123L410.2,50.9Z","x":446.5,"y":86.9,"a":5231},{"n":"Hardin","d":"M482.6,195.5L555.6,195.7L555.6,213.5L558.9,213.5L559.4,267.8L524,267.8L488.1,267.8L488.1,213.5L482.6,213.5L482.6,195.5Z","x":522.5,"y":231.5,"a":5165},{"n":"Harrison","d":"M76.3,338.8L148.1,339.5L165.8,339.3L165.3,393.5L174.7,393.5L174.7,413.4L97.8,413.2L97.8,406.6L92.9,406.5L91.8,413L83.5,408.1L85.1,398.1L79,391.1L82.9,384.2L78.5,376.7L84.6,373.7L81.3,364.1L85.7,360.5L87.3,352.3L80.7,348.2L76.3,338.8Z","x":125.6,"y":376.6,"a":6271},{"n":"Henry","d":"M756.8,538.7L757.3,484.6L792.7,484.6L810.4,485L810.4,502.9L810.4,557.1L804.3,557.1L756.8,556.9L756.8,538.7Z","x":783.7,"y":520.9,"a":3864},{"n":"Howard","d":"M628.5,0.2L644.6,0.2L701.5,0L700.9,59.6L628,59.6L628.5,0.2Z","x":664.7,"y":29.9,"a":4339},{"n":"Humboldt","d":"M337.2,122.8L410.2,123L409.6,177.5L337.2,177.3L337.2,122.8Z","x":373.6,"y":150.1,"a":3962},{"n":"Ida","d":"M137.1,194.8L191.8,194.6L191.8,212.8L201.8,212.8L201.8,267.4L148.1,267.2L148.7,212.8L137.1,212.6L137.1,194.8Z","x":172.4,"y":230.9,"a":3899},{"n":"Iowa","d":"M667.8,339.5L739.6,339.7L740.2,393.8L739.6,412.3L721.9,412.5L667.8,412.7L667.2,357.5L667.8,339.5Z","x":703.7,"y":376.1,"a":5282},{"n":"Jackson","d":"M883.4,250L919.3,250L919.3,231.8L948.6,232L956.9,242.7L955.2,253.3L963.5,266.5L972.4,271L989.5,279.5L996.7,286.8L995.6,295.4L997.8,304.3L883.4,304.1L883.4,250Z","x":933.4,"y":275.5,"a":5848},{"n":"Jasper","d":"M505.8,339.5L524,339.5L595.4,339.5L595.4,393.6L597,393.6L597,412.9L579.3,412.9L509.1,413L509.1,393.8L505.8,393.8L505.8,339.5Z","x":551.2,"y":376.1,"a":6548},{"n":"Jefferson","d":"M686,484.6L721.9,484.4L757.3,484.6L756.8,538.7L686,539.1L686,484.6Z","x":721.5,"y":511.7,"a":3865},{"n":"Johnson","d":"M739.6,339.7L810.9,340L810.9,394.3L810.9,430.7L793.3,430.5L788.3,421L787.7,412.3L739.6,412.3L740.2,393.8L739.6,339.7Z","x":777.1,"y":379.2,"a":5536},{"n":"Jones","d":"M811.5,249.6L847.4,249.8L883.4,250L883.4,304.1L883.4,322.2L810.9,321.9L811.5,249.6Z","x":847.3,"y":286,"a":5217},{"n":"Keokuk","d":"M650.1,412.7L667.8,412.7L721.9,412.5L721.9,484.4L686,484.6L650.6,484.8L650.1,412.7Z","x":686.1,"y":448.6,"a":5150},{"n":"Kossuth","d":"M337.2,0L367.6,0.2L410.2,0.4L410.2,50.9L410.2,123L337.2,122.8L337.2,50.9L337.2,0Z","x":373.7,"y":61.6,"a":8956},{"n":"Lee","d":"M756.8,556.9L804.3,557.1L822.6,565.4L824.2,569.5L850.2,581.3L849.1,586.1L839.1,593.4L829.2,593.2L812.1,600.9L804.9,613.1L810.9,619.4L808.7,635.4L809.8,644.3L803.2,647.2L792.7,645.9L786.6,640.4L786.1,630.4L780.5,630.1L771.7,619.9L772.2,613.5L762.3,611L757.3,601.6L756.8,556.9Z","x":793.7,"y":592.5,"a":4771},{"n":"Linn","d":"M739.6,249.1L775.6,249.6L811.5,249.6L810.9,321.9L810.9,340L739.6,339.7L739.1,321.5L739.6,249.1Z","x":775.2,"y":294.6,"a":6488},{"n":"Louisa","d":"M793.3,430.5L810.9,430.7L810.9,448.6L856.3,449.2L850.2,468.8L861.2,483.9L868.4,485L875.6,498.3L875.6,503.3L810.4,502.9L810.4,485L792.7,484.6L793.3,430.5Z","x":827.5,"y":473.1,"a":3682},{"n":"Lucas","d":"M473.7,485L509.1,485L544.5,485L544.5,539.4L473.7,539.4L473.7,485Z","x":509.1,"y":512.2,"a":3852},{"n":"Lyon","d":"M5.5,0.2L27.6,0.2L89.6,0.2L118.9,0.2L118.9,50.4L82.4,50.6L12.2,50L8.3,42.6L16,41.7L16.6,22.1L4.4,10.7L8.3,4.1L5.5,0.2Z","x":65.4,"y":25,"a":5366},{"n":"Madison","d":"M368.2,413.9L421.2,414.1L437.8,412.1L437.8,484.8L403.5,485.9L368.2,485.7L368.2,413.9Z","x":403,"y":449.7,"a":4997},{"n":"Mahaska","d":"M579.3,412.9L597,412.9L650.1,412.7L650.6,484.8L614.7,485L579.3,485L579.3,412.9Z","x":614.8,"y":448.9,"a":5125},{"n":"Marion","d":"M509.1,413L579.3,412.9L579.3,485L544.5,485L509.1,485L509.1,416.6L509.1,413Z","x":544.2,"y":449,"a":5058},{"n":"Marshall","d":"M524,267.8L559.4,267.8L595.4,267.6L595.4,339.5L524,339.5L524,267.8Z","x":559.7,"y":303.6,"a":5123},{"n":"Mills","d":"M116.1,485.1L192.4,485.1L192.4,538.7L126,538.7L122.2,530.7L123.8,522.9L118.9,519.3L116.1,507.2L118.3,501.7L116.1,485.1Z","x":155.8,"y":511.3,"a":3912},{"n":"Mitchell","d":"M555.6,0.4L628.5,0.2L628,59.6L555.6,59.6L555.6,50.9L555.6,0.4Z","x":591.9,"y":29.9,"a":4308},{"n":"Monona","d":"M42.6,266.5L148.1,267.2L148.1,339.5L76.3,338.8L72.4,330.6L75.7,328.7L77.4,316.9L68.5,315.8L69.1,310.5L60.8,308.5L63.6,305.7L55.3,301.2L55.8,286.5L43.7,276.5L42.6,266.5Z","x":103.8,"y":300.2,"a":6280},{"n":"Monroe","d":"M544.5,485L579.3,485L614.7,485L615.3,539.3L544.5,539.4L544.5,485Z","x":579.7,"y":512.2,"a":3832},{"n":"Montgomery","d":"M192.4,485.1L227.8,485.3L262.6,485.5L262.6,538.9L192.4,538.7L192.4,485.1Z","x":227.5,"y":512,"a":3756},{"n":"Muscatine","d":"M810.9,430.7L810.9,394.3L882.8,394.5L901.1,394.7L900.5,424.4L891.1,423.9L878.4,431L871.2,428.3L860.7,432.1L856.3,449.2L810.9,448.6L810.9,430.7Z","x":850.3,"y":418,"a":4012},{"n":"O'Brien","d":"M118.9,50.4L191.8,50.9L191.8,122.5L119.4,122.7L118.9,104.5L118.9,50.4Z","x":155.3,"y":86.6,"a":5241},{"n":"Osceola","d":"M118.9,0.2L181.3,0L191.8,0.2L191.8,50.9L118.9,50.4L118.9,0.2Z","x":155.4,"y":25.4,"a":3685},{"n":"Page","d":"M192.4,538.7L262.6,538.9L262.6,574.9L264.8,574.9L264.8,606.4L220.6,605.7L194,605.3L194.6,574.7L192.4,574.5L192.4,538.7Z","x":228.5,"y":572.4,"a":4715},{"n":"Palo Alto","d":"M264.8,50.9L337.2,50.9L337.2,122.8L264.8,122.5L264.8,50.9Z","x":301,"y":86.8,"a":5195},{"n":"Plymouth","d":"M14.9,122.7L119.4,122.7L118.9,194.9L20.5,194.8L18.2,180.3L8.8,169.7L0.6,164.9L0,151.3L6.1,146.7L7.7,137.4L13.8,134.6L14.9,122.7Z","x":64.4,"y":158.3,"a":7866},{"n":"Pocahontas","d":"M264.8,122.5L337.2,122.8L337.2,177.3L337.2,195.3L264.8,194.9L264.8,122.5Z","x":301,"y":158.9,"a":5245},{"n":"Polk","d":"M433.9,339.3L452.2,339.3L505.8,339.5L505.8,393.8L509.1,393.8L509.1,413L509.1,416.6L495.9,416.2L491.4,413L437.8,412.1L437.8,393.8L433.9,393.8L433.9,339.3Z","x":471.1,"y":376.3,"a":5310},{"n":"Pottawattamie","d":"M97.8,413.2L174.7,413.4L227.8,413.6L227.8,485.3L192.4,485.1L116.1,485.1L122.2,482.1L109.5,478.7L111.1,471.3L108.3,460L115.5,452.7L104.5,447.9L107.2,437.3L107.8,422.1L96.7,420.3L97.8,413.2Z","x":167.9,"y":448.6,"a":8576},{"n":"Poweshiek","d":"M595.4,339.5L667.8,339.5L667.2,357.5L667.8,412.7L650.1,412.7L597,412.9L597,393.6L595.4,393.6L595.4,339.5Z","x":631.6,"y":376,"a":5252},{"n":"Ringgold","d":"M332.8,539.1L403,539.6L403,606.6L369.8,607.1L332.8,607.3L332.8,539.1Z","x":367.8,"y":573.2,"a":4751},{"n":"Sac","d":"M191.8,194.6L264.8,194.9L264.8,212.8L273.6,212.8L273.1,267.6L237.7,267.4L201.8,267.4L201.8,212.8L191.8,212.8L191.8,194.6Z","x":235.2,"y":230.9,"a":5228},{"n":"Scott","d":"M883.4,358.4L900.5,358.4L911.6,366L917.6,360.5L932.6,361.1L938.6,357.5L949.1,358L958.5,367.1L972.9,367.3L973.5,373.7L968.5,384.2L969,395.9L960.2,399.7L950.2,409.8L935.9,409.7L930.3,412L921.5,421.9L908.2,425L900.5,424.4L901.1,394.7L882.8,394.5L883.4,358.4Z","x":925.5,"y":386.1,"a":4158},{"n":"Shelby","d":"M165.8,339.3L237.1,339.3L237.1,393.5L245.4,393.5L245.4,413.8L227.8,413.6L174.7,413.4L174.7,393.5L165.3,393.5L165.8,339.3Z","x":203.7,"y":376.4,"a":5296},{"n":"Sioux","d":"M12.2,50L82.4,50.6L118.9,50.4L118.9,104.5L119.4,122.7L14.9,122.7L20.5,112.2L17.1,108.4L21.6,103.4L18.8,93.5L27.6,86.5L30.4,78.9L25.4,72.6L24.3,57.9L11.1,57.3L12.2,50Z","x":70.1,"y":86.7,"a":7036},{"n":"Story","d":"M452.2,267.8L488.1,267.8L524,267.8L524,339.5L505.8,339.5L452.2,339.3L452.2,267.8Z","x":488.1,"y":303.6,"a":5143},{"n":"Tama","d":"M631.3,249.6L667.8,249.4L667.8,339.5L595.4,339.5L595.4,267.6L595.4,249.6L631.3,249.6Z","x":631.6,"y":294.5,"a":6512},{"n":"Taylor","d":"M262.6,538.9L332.8,539.1L332.8,607.3L307.9,607.1L264.8,606.4L264.8,574.9L262.6,574.9L262.6,538.9Z","x":298.3,"y":572.7,"a":4697},{"n":"Union","d":"M332.8,485.7L368.2,485.7L403.5,485.9L403,539.6L332.8,539.1L332.8,485.7Z","x":368.1,"y":512.5,"a":3776},{"n":"Van Buren","d":"M686,539.1L756.8,538.7L756.8,556.9L757.3,601.6L755.1,598.4L722.5,600L686,601L686,539.1Z","x":721.3,"y":569.4,"a":4328},{"n":"Wapello","d":"M614.7,485L650.6,484.8L686,484.6L686,539.1L615.3,539.3L614.7,485Z","x":650.5,"y":512,"a":3862},{"n":"Warren","d":"M437.8,412.1L491.4,413L495.9,416.2L509.1,416.6L509.1,485L473.7,485L437.8,484.8L437.8,412.1Z","x":473.1,"y":449.2,"a":5102},{"n":"Washington","d":"M721.9,412.5L739.6,412.3L787.7,412.3L788.3,421L793.3,430.5L792.7,484.6L757.3,484.6L721.9,484.4L721.9,412.5Z","x":757.1,"y":448.8,"a":5071},{"n":"Wayne","d":"M473.7,539.4L544.5,539.4L544.5,604.6L501.9,605.3L473.7,605.3L473.7,539.4Z","x":509,"y":572.2,"a":4651},{"n":"Webster","d":"M337.2,177.3L409.6,177.5L410.2,195.5L409.6,213.3L416.3,213.3L416.3,267.6L380.3,267.6L344.4,267.8L344.4,212.9L337.2,212.9L337.2,195.3L337.2,177.3Z","x":377.6,"y":222.4,"a":6515},{"n":"Winnebago","d":"M410.2,0.4L459.9,0.4L483.1,0.4L483.1,50.9L410.2,50.9L410.2,0.4Z","x":446.6,"y":25.6,"a":3681},{"n":"Winneshiek","d":"M700.9,59.6L701.5,0L755.1,0L773.4,0.2L773.4,32.9L774.5,86.9L700.9,86.7L700.9,59.6Z","x":737.4,"y":43.6,"a":6303},{"n":"Woodbury","d":"M20.5,194.8L118.9,194.9L137.1,194.8L137.1,212.6L148.7,212.8L148.1,267.2L42.6,266.5L47.5,263.5L42.6,253.7L39.8,245.2L33.7,240L33.7,226.5L38.7,218.6L36.5,210.8L28.7,209.4L21.6,203.8L23.8,195.8L20.5,194.8Z","x":90.5,"y":230.3,"a":7927},{"n":"Worth","d":"M483.1,0.4L551.7,0.4L555.6,0.4L555.6,50.9L483.1,50.9L483.1,0.4Z","x":519.4,"y":25.6,"a":3661},{"n":"Wright","d":"M409.6,177.5L410.2,123L482.6,122.8L482.6,195.5L410.2,195.5L409.6,177.5Z","x":446.3,"y":159.2,"a":5278}]};
+
+</script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const C = IOWA.counties;
+
+/* ---------------- model settings (tuned so tipping points land near 1 − 1/R₀) ---------------- */
+const NP = 60, D = 5, TICK = 1 / 7;        // people per county, days sick, seconds per model day
+const P_LOCAL = 0.62, P_NEIGHBOR = 0.34;   // remaining 4% = long-distance travel
+const DISEASES = [
+  { id: 'flu', name: 'Flu', r0: 1.5 },
+  { id: 'covid', name: 'COVID-19', note: 'original', r0: 3 },
+  { id: 'measles', name: 'Measles', r0: 15 },
+];
+let disease = DISEASES[2];
+
+/* ---------------- county neighbors from shared borders ---------------- */
+const shapePts = C.map((c) => new Set(c.d.match(/-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/g)));
+const adj = C.map(() => []);
+for (let i = 0; i < C.length; i++) for (let j = i + 1; j < C.length; j++) {
+  let n = 0; for (const p of shapePts[i]) if (shapePts[j].has(p) && ++n >= 2) break;
+  if (n >= 2) { adj[i].push(j); adj[j].push(i); }
+}
+const paths = C.map((c) => new Path2D(c.d));
+
+/* ---------------- people: dots placed inside each county ---------------- */
+const probe = document.createElement('canvas').getContext('2d');
+const people = [], byCounty = C.map(() => []);
+C.forEach((c, ci) => {
+  const xs = [], ys = [];
+  for (const p of shapePts[ci]) { const [x, y] = p.split(',').map(Number); xs.push(x); ys.push(y); }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const cols = Math.ceil(Math.sqrt(NP * (x1 - x0) / (y1 - y0))) + 2, rows = Math.ceil(NP / cols) + 3;
+  const cand = [];
+  for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) {
+    const x = x0 + (k + 0.5 + (Math.random() - 0.5) * 0.7) * (x1 - x0) / cols;
+    const y = y0 + (r + 0.5 + (Math.random() - 0.5) * 0.7) * (y1 - y0) / rows;
+    if (probe.isPointInPath(paths[ci], x, y)) cand.push([x, y]);
+  }
+  for (let tries = 0; cand.length < NP && tries < 5000; tries++) {
+    const x = x0 + Math.random() * (x1 - x0), y = y0 + Math.random() * (y1 - y0);
+    if (probe.isPointInPath(paths[ci], x, y)) cand.push([x, y]);
+  }
+  cand.sort(() => Math.random() - 0.5);
+  for (let k = 0; k < NP; k++) { const p = { x: cand[k][0], y: cand[k][1], c: ci, s: 0, t: 0, flash: 0 }; people.push(p); byCounty[ci].push(p); }
+});
+
+/* ---------------- simulation ---------------- */
+let infected = [], running = false, acc = 0, day = 0, curve = [], runs = [], hit = new Set(), totalSick = 0;
+const RUN_COLORS = ['#ff3b4e', '#ffd35f', '#5fe3ff', '#c58bff', '#7be0a6', '#ff8a5f'];
+function poisson(l) { const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
+
+function prepare() {
+  const v = +$('vax').value / 100;
+  for (const p of people) { p.s = Math.random() < v ? 3 : 0; p.t = 0; p.flash = 0; }
+  infected = []; day = 0; curve = [0]; hit = new Set(); totalSick = 0;
+}
+function seed(ci) {
+  prepare();
+  const pool = byCounty[ci].filter((p) => p.s === 0);
+  if (!pool.length) { banner(`Everyone in ${C[ci].n} County is vaccinated, so the disease can’t even start there!`); return; }
+  pool.slice(0, 3).forEach((p) => { p.s = 1; p.flash = 1; infected.push(p); });
+  hit.add(ci); totalSick = infected.length; curve = [infected.length];
+  running = true; $('go').disabled = true;
+  banner(`${disease.name} arrives in <b>${C[ci].n} County</b> with ${$('vax').value}% of Iowans vaccinated…`);
+  ping(660);
+}
+function step() {
+  const fresh = [];
+  for (const p of infected) {
+    const k = poisson(disease.r0 / D);
+    for (let j = 0; j < k; j++) {
+      const r = Math.random(); let ci = p.c;
+      if (r > P_LOCAL + P_NEIGHBOR) ci = Math.random() * C.length | 0;
+      else if (r > P_LOCAL && adj[p.c].length) ci = adj[p.c][Math.random() * adj[p.c].length | 0];
+      const q = byCounty[ci][Math.random() * NP | 0];
+      if (q.s === 0) { q.s = 1; q.t = 0; q.flash = 1; fresh.push(q); hit.add(ci); }
+    }
+  }
+  for (const p of infected) if (++p.t >= D) p.s = 2;
+  infected = infected.filter((p) => p.s === 1).concat(fresh);
+  totalSick += fresh.length; day++; curve.push(infected.length);
+  if (!infected.length) finish();
+}
+function finish() {
+  running = false; $('go').disabled = false;
+  const pct = Math.round(100 * totalSick / people.length);
+  const color = RUN_COLORS[runs.length % RUN_COLORS.length];
+  runs.push({ curve: curve.slice(), color, label: `${disease.name} · ${$('vax').value}% vaccinated`, sick: totalSick, pct, counties: hit.size });
+  if (runs.length > 6) runs.shift();
+  renderRuns();
+  const big = hit.size > 15;
+  banner(big
+    ? `Outbreak over after ${day} days: <b style="color:var(--red)">${pct}% of people got sick</b> in <b>${hit.size} counties</b>. Try more vaccination?`
+    : `It fizzled out! Only <b>${totalSick}</b> people got sick in <b>${hit.size}</b> ${hit.size === 1 ? 'county' : 'counties'}. Enough people were protected that the disease ran out of people to infect. That’s <b style="color:var(--cyan)">herd immunity</b>.`, 9000);
+  ping(big ? 220 : 880);
+  if (runs.length >= 2) revealTip();
+}
+
+/* ---------------- drawing ---------------- */
+const cv = $('map'), ctx = cv.getContext('2d');
+let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2.5);
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  const pad = 16, s = Math.min((r.width - 2 * pad) / IOWA.W, (r.height - 2 * pad - 30) / IOWA.H);
+  view = { s, ox: (r.width - IOWA.W * s) / 2, oy: (r.height - IOWA.H * s) / 2 - 8, dpr };
+  const cr = $('curve').getBoundingClientRect();
+  $('curve').width = Math.round(cr.width * dpr); $('curve').height = Math.round(cr.height * dpr);
+  drawCurve();
+}
+function sprite(color, r, glow) {
+  const size = Math.ceil((r + glow) * 2 * 3), c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'), m = size / 2;
+  if (glow) { const grd = g.createRadialGradient(m, m, 0, m, m, m); grd.addColorStop(0, color); grd.addColorStop(0.25, color + 'aa'); grd.addColorStop(1, color + '00'); g.fillStyle = grd; g.fillRect(0, 0, size, size); }
+  g.fillStyle = color; g.beginPath(); g.arc(m, m, r * 3, 0, Math.PI * 2); g.fill();
+  return { c, half: size / 6 };
+}
+const SPR = [sprite('#9fb6e0', 0.95, 0), sprite('#ff3b4e', 1.6, 4.5), sprite('#7be0a6', 0.95, 0), sprite('#5fe3ff', 1.05, 0)];
+
+function draw() {
+  const { s, ox, oy, dpr } = view;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.save(); ctx.translate(ox, oy); ctx.scale(s, s);
+  // state glow
+  ctx.save(); ctx.shadowColor = 'rgba(95,227,255,0.45)'; ctx.shadowBlur = 24 * s;
+  for (const p of paths) { ctx.fillStyle = '#0d1a36'; ctx.fill(p); }
+  ctx.restore();
+  // county heat: how many are sick right now
+  const sickBy = new Float32Array(C.length);
+  for (const p of infected) sickBy[p.c]++;
+  C.forEach((c, i) => {
+    const k = Math.min(1, sickBy[i] / (NP * 0.35));
+    ctx.fillStyle = k > 0 ? `rgba(255, 50, 70, ${0.08 + 0.42 * k})` : (hit.has(i) ? 'rgba(123, 224, 166, 0.07)' : '#0d1a36');
+    ctx.fill(paths[i]);
+    ctx.strokeStyle = '#2b4f86'; ctx.lineWidth = 1 / s * 1.1; ctx.stroke(paths[i]);
+  });
+  // people
+  ctx.globalCompositeOperation = 'source-over';
+  for (const st of [0, 2, 3]) { const sp = SPR[st]; for (const p of people) if (p.s === st) ctx.drawImage(sp.c, p.x - sp.half, p.y - sp.half, sp.half * 2, sp.half * 2); }
+  ctx.globalCompositeOperation = 'lighter';
+  const si = SPR[1];
+  for (const p of infected) {
+    const k = 1 + p.flash * 1.6;
+    ctx.drawImage(si.c, p.x - si.half * k, p.y - si.half * k, si.half * 2 * k, si.half * 2 * k);
+    p.flash *= 0.9;
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // county names
+  ctx.font = `${8.5}px -apple-system, Helvetica, Arial`; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(190, 210, 255, 0.4)';
+  for (const c of C) ctx.fillText(c.n, c.x, c.y + 3);
+  ctx.restore();
+}
+
+function drawCurve() {
+  const cvs = $('curve'), g = cvs.getContext('2d'), w = cvs.width, h = cvs.height, dpr = view.dpr;
+  g.clearRect(0, 0, w, h);
+  const all = runs.map((r) => r.curve).concat(running || curve.length > 1 ? [curve] : []);
+  const maxY = Math.max(20, ...all.flat()), maxX = Math.max(40, ...all.map((c) => c.length));
+  g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(0, h * i / 4); g.lineTo(w, h * i / 4); g.stroke(); }
+  const line = (c, color, width, alpha) => {
+    g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = width * dpr; g.lineJoin = 'round'; g.beginPath();
+    c.forEach((y, x) => { const px = x / maxX * w, py = h - 4 * dpr - y / maxY * (h - 10 * dpr); x ? g.lineTo(px, py) : g.moveTo(px, py); });
+    g.stroke(); g.globalAlpha = 1;
+  };
+  runs.forEach((r) => line(r.curve, r.color, 1.6, 0.55));
+  if (running) line(curve, '#ffffff', 2.4, 1);
+}
+function renderRuns() {
+  $('runs').innerHTML = runs.slice().reverse().map((r) =>
+    `<div><i style="background:${r.color}"></i><span><b>${r.label}</b> → ${r.pct}% got sick · ${r.counties} counties</span></div>`).join('');
+}
+
+/* ---------------- UI ---------------- */
+let bannerTimer;
+function banner(html, ms) {
+  const b = $('banner'); b.innerHTML = html; b.classList.remove('hide');
+  clearTimeout(bannerTimer); if (ms) bannerTimer = setTimeout(() => b.classList.add('hide'), ms);
+}
+let ac = null;
+function ping(f) {
+  try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { return; }
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.4);
+}
+
+$('diseases').innerHTML = DISEASES.map((d) =>
+  `<button data-id="${d.id}"><b>${d.name}</b><span>${d.note ? d.note + ' · ' : ''}R₀ ≈ ${d.r0}</span></button>`).join('');
+function setDisease(id) {
+  disease = DISEASES.find((d) => d.id === id);
+  document.querySelectorAll('#diseases button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+  if ($('tip').style.display === 'block') revealTip();
+}
+document.querySelectorAll('#diseases button').forEach((b) => b.addEventListener('click', () => { if (!running) setDisease(b.dataset.id); }));
+$('vax').addEventListener('input', () => { $('vaxVal').textContent = $('vax').value + '%'; if (!running) { prepare(); } });
+
+function revealTip() {
+  const thr = Math.round(100 * (1 - 1 / disease.r0));
+  const left = `calc(${thr / 99} * (100% - 22px) + 11px)`;
+  $('tip').style.display = $('tipLbl').style.display = 'block';
+  $('tip').style.left = left; $('tipLbl').style.left = left;
+  $('tipLbl').textContent = `tipping point ≈ ${thr}%`;
+  $('tipText').innerHTML = `For <b style="color:var(--ink)">${disease.name}</b> the herd-immunity tipping point is about <b style="color:#ffd35f">1 − 1/R₀ ≈ ${thr}%</b>. Above it, each sick person infects fewer than one new person, so outbreaks die out. The more contagious the disease, the more people need protection.`;
+}
+$('showTip').addEventListener('click', revealTip);
+$('clear').addEventListener('click', () => { if (running) return; runs = []; renderRuns(); prepare(); drawCurve(); banner('Runs cleared. Tap a county to start a new outbreak.', 4000); });
+$('go').addEventListener('click', () => {
+  if (running) return;
+  const rural = C.map((c, i) => i).filter((i) => !['Polk', 'Linn', 'Scott', 'Johnson', 'Black Hawk'].includes(C[i].n));
+  seed(rural[Math.random() * rural.length | 0]);
+});
+cv.addEventListener('pointerdown', (e) => {
+  if (running) return;
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left - view.ox) / view.s, y = (e.clientY - r.top - view.oy) / view.s;
+  const ci = paths.findIndex((p) => probe.isPointInPath(p, x, y));
+  if (ci >= 0) seed(ci);
+});
+addEventListener('resize', resize);
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (running) { acc += dt; while (acc >= TICK && running) { acc -= TICK; step(); } drawCurve(); }
+  draw();
+  $('sNow').textContent = infected.length.toLocaleString();
+  $('sTot').textContent = totalSick.toLocaleString();
+  $('sVax').textContent = people.reduce((n, p) => n + (p.s === 3), 0).toLocaleString();
+  $('sCty').textContent = hit.size;
+  requestAnimationFrame(loop);
+}
+setDisease('measles'); prepare(); resize(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

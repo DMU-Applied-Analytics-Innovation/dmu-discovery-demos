@@ -34,6 +34,10 @@
   a.tile::before { content: ""; position: absolute; inset: 0; opacity: 0.55; pointer-events: none; }
   a.heart::before { background: radial-gradient(circle at 85% 20%, rgba(255, 70, 90, 0.45), transparent 55%); }
   a.clinic::before { background: radial-gradient(circle at 85% 20%, rgba(95, 227, 255, 0.4), transparent 55%); }
+  a.outbreak::before { background: radial-gradient(circle at 85% 20%, rgba(255, 140, 60, 0.4), transparent 55%); }
+  a.reflex::before { background: radial-gradient(circle at 85% 20%, rgba(45, 255, 138, 0.35), transparent 55%); }
+  .outbreak h2 { color: #ff9a5c; }
+  .reflex h2 { color: #2dff8a; }
   a.heart { box-shadow: 0 0 40px rgba(255, 70, 90, 0.18); }
   a.clinic { box-shadow: 0 0 40px rgba(95, 227, 255, 0.16); }
   .emoji { font-size: clamp(54px, 7vw, 80px); line-height: 1; position: relative; }
@@ -62,6 +66,18 @@
       <h2>Mobile Clinic · Iowa</h2>
       <p>Run a fleet of mobile clinics for one week. Send the right health experts to rural Iowa counties and help as many Iowans as you can.</p>
       <span class="play">Play ▸</span>
+    </a>
+    <a class="tile outbreak" href="outbreak.html">
+      <span class="emoji">🦠</span>
+      <h2>Outbreak · Iowa</h2>
+      <p>Release measles, flu or COVID across Iowa. How many people need to be vaccinated to stop it? Find the herd-immunity tipping point.</p>
+      <span class="play">Start ▸</span>
+    </a>
+    <a class="tile reflex" href="reflex.html">
+      <span class="emoji">⚡</span>
+      <h2>Reflex Lab</h2>
+      <p>How fast is your brain? Test your reaction to light and sound, see where the time goes, and get on today’s leaderboard.</p>
+      <span class="play">Test me ▸</span>
     </a>
   </div>
   <footer>Built by a DMU computational fellow · Runs entirely in your browser</footer>

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Reflex Lab</title>
+<style>
+  :root {
+    --ink: #eef3ff; --dim: rgba(238, 243, 255, 0.62);
+    --glass: rgba(12, 20, 42, 0.72); --edge: rgba(140, 180, 255, 0.2);
+    --go: #2dff8a; --wait: #ff3b4e; --cyan: #5fe3ff; --gold: #ffd35f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(ellipse at 40% 40%, #0b1838 0%, #050a1a 60%, #02040b 100%);
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #app {
+    position: fixed; inset: 0; display: grid;
+    grid-template-columns: 1fr clamp(300px, 30vw, 420px); grid-template-rows: auto 1fr;
+    grid-template-areas: "top side" "zone side"; gap: 12px 18px;
+    padding: max(14px, env(safe-area-inset-top)) 18px max(14px, env(safe-area-inset-bottom)) 20px;
+  }
+  #top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: clamp(18px, 2.2vw, 28px); font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; }
+  h1 b { font-weight: 800; color: var(--go); text-shadow: 0 0 16px rgba(45, 255, 138, 0.6); }
+  .modes { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge); }
+  .modes button { border: 0; background: transparent; padding: 10px 18px; border-radius: 999px; font-size: 15px; }
+  .modes button.on { background: rgba(95, 227, 255, 0.2); box-shadow: inset 0 0 0 1px rgba(95, 227, 255, 0.6); }
+  #dots { display: flex; gap: 8px; }
+  #dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--edge); }
+  #dots i.done { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+
+  #zone {
+    grid-area: zone; border-radius: 28px; border: 1px solid var(--edge); position: relative; overflow: hidden;
+    display: grid; place-items: center; text-align: center; touch-action: manipulation; cursor: pointer;
+    background: radial-gradient(circle at 50% 45%, #13306a, #0a1430 70%); transition: background 0.15s;
+  }
+  #zone.wait { background: radial-gradient(circle at 50% 45%, #5a0c18, #22050b 70%); }
+  #zone.go { background: radial-gradient(circle at 50% 45%, #5dffb0, #0fb860 75%); transition: none; }
+  #zone.listen { background: radial-gradient(circle at 50% 45%, #1d1640, #0a0a1d 70%); }
+  #zone.early { background: radial-gradient(circle at 50% 45%, #6b4a00, #241800 70%); }
+  #big { font-size: clamp(44px, 8vw, 110px); font-weight: 900; letter-spacing: 0.02em; line-height: 1.05; }
+  #zone.go #big { color: #04210f; }
+  #small { font-size: clamp(16px, 1.9vw, 24px); color: var(--dim); margin-top: 12px; max-width: 30ch; margin-inline: auto; line-height: 1.4; }
+  #zone.go #small { color: #04210f; }
+  #ms { font-variant-numeric: tabular-nums; }
+
+  #side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 18px; padding: 14px 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .lbl { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+  #body { width: 100%; height: auto; display: block; margin-top: 4px; }
+  .steps { margin: 6px 0 0; padding-left: 20px; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+  .steps b { color: var(--ink); }
+  .split { display: flex; height: 26px; border-radius: 8px; overflow: hidden; margin-top: 8px; font-size: 11.5px; font-weight: 700; }
+  .split div { display: grid; place-items: center; white-space: nowrap; overflow: hidden; }
+  #result { display: none; }
+  .bigrow { display: flex; gap: 18px; margin-top: 6px; }
+  .bigrow .v { font-size: 36px; font-weight: 200; font-variant-numeric: tabular-nums; }
+  .bigrow .v small { font-size: 14px; color: var(--dim); }
+  .board div { display: flex; justify-content: space-between; padding: 6px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .board div.me { color: var(--go); font-weight: 700; }
+  #saveRow { display: none; gap: 8px; margin-top: 10px; }
+  #initials { font: inherit; font-size: 20px; width: 6.5ch; text-align: center; text-transform: uppercase; letter-spacing: 0.2em; padding: 8px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(0,0,0,0.3); color: var(--ink); }
+  .btn { padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.35); background: linear-gradient(135deg, #1fb6ff, #7b5cff); font-weight: 800; }
+  .foot { font-size: 11.5px; color: var(--dim); line-height: 1.45; }
+  .foot a { color: inherit; }
+  @media (orientation: portrait), (max-width: 860px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "top" "zone" "side"; }
+    #side { max-height: 38vh; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <h1>Reflex <b>Lab</b></h1>
+    <div class="modes" id="modes">
+      <button data-mode="see" class="on">👀 See it</button>
+      <button data-mode="hear">👂 Hear it</button>
+    </div>
+    <div id="dots"><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+
+  <div id="zone">
+    <div>
+      <div id="big">Tap to start</div>
+      <div id="small">When the screen turns <b style="color:var(--go)">green</b>, tap as fast as you can. 5 tries.</div>
+    </div>
+  </div>
+
+  <aside id="side">
+    <div class="card">
+      <div class="lbl">Your signal’s journey</div>
+      <svg id="body" viewBox="0 0 320 210" aria-label="Signal path from eye to brain to finger">
+        <defs><filter id="gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <!-- figure -->
+        <g fill="none" stroke="rgba(160,190,255,0.35)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="80" cy="48" r="30"/>
+          <path d="M80 78 V158 M80 158 L60 205 M80 158 L100 205"/>
+          <path d="M80 98 L150 112 L232 118"/>
+        </g>
+        <rect x="246" y="70" width="58" height="96" rx="8" fill="none" stroke="rgba(95,227,255,0.6)" stroke-width="2"/>
+        <rect id="screen" x="251" y="75" width="48" height="86" rx="5" fill="#13306a"/>
+        <circle id="eye" cx="96" cy="44" r="4" fill="#9cc7ff"/>
+        <path id="ear" d="M108 50 q8 4 0 12" stroke="#9cc7ff" stroke-width="2.5" fill="none" opacity="0"/>
+        <ellipse cx="74" cy="38" rx="17" ry="12" fill="rgba(255,120,200,0.18)" stroke="rgba(255,120,200,0.5)"/>
+        <text x="74" y="22" fill="rgba(255,150,210,0.8)" font-size="9" text-anchor="middle">brain</text>
+        <!-- nerve path: eye -> brain -> spinal cord -> arm -> finger -->
+        <path id="nerve" d="M96 44 C90 40 82 38 74 38 C70 50 80 60 80 80 L80 98 L150 112 L236 118" fill="none" stroke="rgba(45,255,138,0.25)" stroke-width="3" stroke-linecap="round"/>
+        <path id="pulse" d="M96 44 C90 40 82 38 74 38 C70 50 80 60 80 80 L80 98 L150 112 L236 118" fill="none" stroke="#2dff8a" stroke-width="4" stroke-linecap="round" filter="url(#gl)" stroke-dasharray="26 600" stroke-dashoffset="26" opacity="0"/>
+        <circle cx="236" cy="118" r="5" fill="#ffd35f"/>
+        <text x="236" y="140" fill="rgba(255,211,95,0.85)" font-size="9" text-anchor="middle">finger</text>
+        <text x="86" y="140" fill="rgba(160,190,255,0.6)" font-size="9">spinal cord</text>
+      </svg>
+      <ol class="steps" id="stepsList">
+        <li><b>Eye:</b> light hits your retina and becomes an electrical signal.</li>
+        <li><b>Brain:</b> recognizes “green!” and decides to move.</li>
+        <li><b>Nerves:</b> the command races down your spinal cord and arm at up to <b>~60 m/s</b> (about 130 mph).</li>
+        <li><b>Muscle:</b> your finger taps.</li>
+      </ol>
+    </div>
+
+    <div class="card" id="result">
+      <div class="lbl">Your results</div>
+      <div class="bigrow">
+        <div><div class="lbl">Average</div><div class="v" id="avg">—</div></div>
+        <div><div class="lbl">Best</div><div class="v" id="best" style="color:var(--go)">—</div></div>
+      </div>
+      <div class="lbl" style="margin-top:10px">Where did the time go?</div>
+      <div class="split" id="split"></div>
+      <div class="foot" id="splitText" style="margin-top:6px"></div>
+      <div id="saveRow"><input id="initials" maxlength="3" autocomplete="off" autocapitalize="characters" placeholder="ABC"><button class="btn" id="save">Save score</button></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Today’s fastest brains</div>
+      <div class="board" id="board"></div>
+    </div>
+
+    <div class="foot">
+      Why it matters: doctors and athletic trainers use reaction-time tests to help check for <b>concussions</b>, and lack of sleep slows your reactions.
+      Times on a touchscreen include a little screen and touch delay, so they’re slightly slower than lab measurements.
+      <a href="index.html" style="display:block;margin-top:6px">⌂ All demos</a>
+    </div>
+  </aside>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const ROUNDS = 5, NERVE_MS = 25;
+let mode = 'see', state = 'idle', times = [], t0 = 0, timer = null, ac = null;
+
+function audio() { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { ac = null; } }
+function beep(f, d, v, when = 0) {
+  if (!ac) return;
+  const t = ac.currentTime + when, o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.value = f; o.type = 'square';
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.003); g.gain.setValueAtTime(v, t + d); g.gain.linearRampToValueAtTime(0.0001, t + d + 0.02);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + 0.05);
+}
+
+function setZone(cls, big, small) { $('zone').className = cls; $('big').innerHTML = big; $('small').innerHTML = small; }
+function dots() { document.querySelectorAll('#dots i').forEach((d, i) => d.classList.toggle('done', i < times.length)); }
+
+function arm() {
+  state = 'wait';
+  if (mode === 'see') setZone('wait', 'Wait for green…', 'Don’t tap yet!');
+  else setZone('listen', 'Listen…', 'Tap the moment you hear the <b>beep</b>.');
+  $('screen').setAttribute('fill', '#5a0c18');
+  const delay = 1500 + Math.random() * 3000;
+  timer = setTimeout(() => {
+    state = 'go';
+    if (mode === 'see') {
+      setZone('go', 'TAP!', '');
+      $('screen').setAttribute('fill', '#2dff8a');
+      // start timing once the green frame has actually been painted
+      t0 = performance.now() + 8;
+      requestAnimationFrame(() => { t0 = performance.now(); });
+    } else {
+      const lead = 0.03, lat = ((ac && (ac.outputLatency || ac.baseLatency)) || 0) * 1000;
+      beep(1000, 0.12, 0.25, lead);
+      t0 = performance.now() + lead * 1000 + lat;
+    }
+  }, delay);
+}
+
+function onTap() {
+  audio();
+  const now = performance.now();
+  if (state === 'idle' || state === 'result' || state === 'early') { if (times.length >= ROUNDS) reset(); arm(); return; }
+  if (state === 'done') { reset(); arm(); return; }
+  if (state === 'wait') {
+    clearTimeout(timer); state = 'early';
+    setZone('early', 'Too soon!', 'You tapped before the signal. Tap to try that round again.');
+    return;
+  }
+  if (state === 'go') {
+    const ms = Math.round(now - t0);
+    if (ms < 100) {   // faster than humanly possible = a guess
+      state = 'early';
+      setZone('early', 'Lucky guess?', `${Math.max(ms, 0)} ms is faster than a human brain can react. Tap to redo this round.`);
+      return;
+    }
+    times.push(ms); dots(); firePulse();
+    if (times.length >= ROUNDS) { finish(); return; }
+    state = 'result';
+    setZone('', `<span id="ms">${ms}</span> ms`, `${comment(ms)}<br>Tap for round ${times.length + 1} of ${ROUNDS}.`);
+    $('screen').setAttribute('fill', '#13306a');
+  }
+}
+function comment(ms) {
+  const typical = mode === 'see' ? 250 : 200;
+  if (ms < typical - 60) return 'Lightning fast! ⚡';
+  if (ms < typical) return 'Faster than average!';
+  if (ms < typical + 80) return 'Right around typical.';
+  return 'Shake it off, try again!';
+}
+function firePulse() {
+  const p = $('pulse'); p.setAttribute('opacity', 1);
+  p.animate([{ strokeDashoffset: 26 }, { strokeDashoffset: -300 }], { duration: 1100, easing: 'ease-in' }).onfinish = () => p.setAttribute('opacity', 0);
+}
+
+function finish() {
+  state = 'done';
+  const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length), best = Math.min(...times);
+  setZone('', `<span id="ms">${avg}</span> ms`, `Your average over ${ROUNDS} tries. Best: <b>${best} ms</b>.<br>Tap to play again.`);
+  $('screen').setAttribute('fill', '#13306a');
+  $('result').style.display = 'block';
+  $('avg').innerHTML = avg + '<small> ms</small>'; $('best').innerHTML = best + '<small> ms</small>';
+  const brain = Math.max(0, avg - NERVE_MS), nPct = Math.max(8, Math.round(100 * NERVE_MS / avg));
+  $('split').innerHTML = `<div style="width:${nPct}%;background:#2dff8a;color:#04210f">nerves</div><div style="flex:1;background:rgba(255,120,200,0.55)">brain sensing &amp; deciding</div>`;
+  $('splitText').innerHTML = `Your signal only spends about <b>${NERVE_MS} ms</b> traveling along nerves (≈1.5 m at up to ~60 m/s). The other <b>${brain} ms</b> is your ${mode === 'see' ? 'eye and ' : 'ear and '}brain turning the signal into a decision.` +
+    (mode === 'see' ? ' Now try <b>👂 Hear it</b>: most people react faster to sound!' : ' Most people react faster to sound than to light, because the ear turns sound into nerve signals faster than the eye handles light.');
+  $('saveRow').style.display = 'flex'; $('initials').value = '';
+  lastScore = { avg, best, mode };
+  [523, 659, 784].forEach((f, i) => setTimeout(() => beep(f, 0.12, 0.06), i * 110));
+}
+let lastScore = null, myId = null;
+function reset() { times = []; dots(); state = 'idle'; }
+
+const KEY = 'reflex-lab-scores';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } };
+const store = (b) => { try { localStorage.setItem(KEY, JSON.stringify(b)); } catch (e) { /* storage unavailable */ } };
+function showBoard() {
+  const b = load();
+  $('board').innerHTML = b.length ? b.map((e, i) => `<div class="${e.id === myId ? 'me' : ''}"><span>${i + 1}. ${e.name} ${e.mode === 'hear' ? '👂' : '👀'}</span><span>${e.avg} ms avg</span></div>`).join('')
+    : '<div style="color:var(--dim);border:0">No scores yet. Be the first!</div>';
+}
+$('save').addEventListener('click', () => {
+  if (!lastScore) return;
+  const name = ($('initials').value || '???').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || '???';
+  myId = Date.now();
+  const b = load(); b.push({ id: myId, name, ...lastScore }); b.sort((x, y) => x.avg - y.avg); store(b.slice(0, 10));
+  $('saveRow').style.display = 'none'; lastScore = null; showBoard();
+});
+
+$('zone').addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(); });
+document.querySelectorAll('#modes button').forEach((b) => b.addEventListener('click', () => {
+  audio(); clearTimeout(timer); mode = b.dataset.mode; reset();
+  document.querySelectorAll('#modes button').forEach((x) => x.classList.toggle('on', x === b));
+  $('eye').setAttribute('opacity', mode === 'see' ? 1 : 0.3); $('ear').setAttribute('opacity', mode === 'hear' ? 1 : 0);
+  $('stepsList').firstElementChild.innerHTML = mode === 'see'
+    ? '<b>Eye:</b> light hits your retina and becomes an electrical signal.'
+    : '<b>Ear:</b> sound vibrates tiny hair cells in your inner ear, which fire electrical signals.';
+  setZone('', 'Tap to start', mode === 'see'
+    ? 'When the screen turns <b style="color:var(--go)">green</b>, tap as fast as you can. 5 tries.'
+    : 'Close your eyes if you like. Tap the moment you hear the <b>beep</b>. 5 tries. Turn the volume up!');
+}));
+showBoard();
+</script>
+</body>
+</html>
