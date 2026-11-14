@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mobile Clinic Iowa</title>
+<style>
+  :root {
+    --ink: #eef3ff; --dim: rgba(238, 243, 255, 0.62);
+    --glass: rgba(12, 20, 42, 0.72); --edge: rgba(140, 180, 255, 0.2);
+    --cyan: #5fe3ff; --good: #3dff8f; --bad: #ff4f62; --warn: #ffc34d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(ellipse at 40% 45%, #0b1838 0%, #050a1a 55%, #02040b 100%);
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.5;
+    background-image: linear-gradient(rgba(95,227,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(95,227,255,0.05) 1px, transparent 1px);
+    background-size: 46px 46px;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+  #app {
+    position: fixed; inset: 0; display: grid;
+    grid-template-columns: 1fr clamp(290px, 25vw, 360px);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "top side" "map side";
+    gap: 10px 18px;
+    padding: max(14px, env(safe-area-inset-top)) 18px max(14px, env(safe-area-inset-bottom)) 20px;
+  }
+  #top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: clamp(18px, 2.2vw, 28px); font-weight: 200; letter-spacing: 0.3em; text-transform: uppercase; }
+  h1 b { font-weight: 700; color: var(--cyan); text-shadow: 0 0 16px rgba(95,227,255,0.7); }
+  .stats { display: flex; gap: 10px; }
+  .stat { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 16px; min-width: 112px; }
+  .lbl { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+  .num { font-size: clamp(20px, 2vw, 28px); font-weight: 300; font-variant-numeric: tabular-nums; }
+  #clock.urgent { color: var(--bad); animation: blink 0.6s steps(2) infinite; }
+  .bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-top: 5px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), #7b5cff); border-radius: 4px; }
+  .bar i.urgent { background: var(--bad); }
+  #endBtn { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 14px; color: var(--dim); font-size: 13px; }
+  #count {
+    position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4;
+    font-size: clamp(120px, 22vw, 280px); font-weight: 900; color: #fff; opacity: 0;
+    text-shadow: 0 0 60px rgba(255, 79, 98, 0.9), 0 0 20px rgba(255, 79, 98, 0.9);
+  }
+  #count.on { animation: pop 0.9s ease-out; }
+  @keyframes pop { 0% { opacity: 0; transform: scale(1.6); } 20% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(0.8); } }
+  .van .lt { transition: opacity 0.1s; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+
+  #mapWrap { grid-area: map; position: relative; min-height: 0; }
+  #map { width: 100%; height: 100%; display: block; overflow: visible; }
+  .county { fill: #0d1a36; stroke: #2b4f86; stroke-width: 1; transition: fill 0.8s; vector-effect: non-scaling-stroke; }
+  .state { filter: drop-shadow(0 0 10px rgba(95,227,255,0.35)) drop-shadow(0 0 30px rgba(60,120,255,0.25)); }
+  .clabel { font-size: 8.5px; fill: rgba(170, 200, 255, 0.33); text-anchor: middle; pointer-events: none; letter-spacing: 0.04em; }
+  .city circle { fill: #9cc7ff; }
+  .city text { font-size: 10px; fill: rgba(200, 220, 255, 0.55); pointer-events: none; }
+  .need { cursor: pointer; }
+  .need .pulse { transform-box: fill-box; transform-origin: center; animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { from { transform: scale(0.7); opacity: 0.9; } to { transform: scale(2.1); opacity: 0; } }
+  .need text.ic { font-size: 17px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .need text.nm { font-size: 10.5px; text-anchor: middle; fill: #fff; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: #050a1a; stroke-width: 3px; }
+  .van text { text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .fx { pointer-events: none; }
+
+  #side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+  .card { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; padding: 14px 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .team { display: grid; grid-template-columns: 36px 1fr; gap: 10px; align-items: center; padding: 8px 0; }
+  .team + .team { border-top: 1px solid rgba(255,255,255,0.06); }
+  .team .ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; border: 2px solid; background: rgba(0,0,0,0.3); }
+  .team .nm { font-size: 14px; font-weight: 600; }
+  .team .st { font-size: 12.5px; color: var(--dim); }
+  #log div { font-size: 13px; line-height: 1.4; color: var(--dim); padding: 4px 0; }
+  #log div b { color: var(--ink); }
+
+  /* dispatch sheet */
+  #sheet {
+    position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translate(-50%, 140%);
+    width: min(720px, calc(100vw - 24px)); transition: transform 0.35s cubic-bezier(.2,.9,.3,1.1); z-index: 5;
+    background: rgba(10, 18, 40, 0.94); border: 1px solid rgba(140,190,255,0.35); border-radius: 22px; padding: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(95,227,255,0.15);
+  }
+  #sheet.open { transform: translate(-50%, 0); }
+  #sheet h2 { margin: 0; font-size: clamp(18px, 2vw, 24px); }
+  #sheet .sub { color: var(--dim); margin-top: 4px; font-size: 14px; }
+  #sheet .q { margin: 14px 0 10px; font-weight: 700; letter-spacing: 0.04em; }
+  #choices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .choice {
+    border-radius: 14px; border: 2px solid; background: rgba(255,255,255,0.04); padding: 12px 6px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 120px;
+  }
+  .choice:active { transform: scale(0.96); }
+  .choice[disabled] { opacity: 0.35; cursor: not-allowed; }
+  .choice .e { font-size: 28px; }
+  .choice .s { font-weight: 800; font-size: 16px; }
+  .choice .f { font-size: 11.5px; color: var(--dim); line-height: 1.25; }
+  .choice .d { font-size: 11.5px; margin-top: auto; }
+  #cancel { margin-top: 10px; width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--edge); background: transparent; color: var(--dim); }
+
+  #toast {
+    position: fixed; left: 50%; top: max(80px, 11vh); transform: translate(-50%, -20px); opacity: 0; z-index: 6;
+    max-width: min(640px, 92vw); padding: 14px 20px; border-radius: 16px; font-size: 16px; line-height: 1.4; text-align: center;
+    background: rgba(10, 18, 40, 0.95); border: 1px solid var(--edge); transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+  }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #toast.good { border-color: rgba(61,255,143,0.6); box-shadow: 0 0 30px rgba(61,255,143,0.25); }
+  #toast.meh { border-color: rgba(255,195,77,0.6); box-shadow: 0 0 30px rgba(255,195,77,0.2); }
+
+  /* start / end screens */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px;
+    background: rgba(2, 5, 14, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .overlay.hidden { display: none; }
+  .panel { width: min(760px, 100%); max-height: 100%; overflow-y: auto; text-align: center; padding: 30px clamp(18px, 4vw, 44px);
+    background: rgba(10, 18, 40, 0.9); border: 1px solid rgba(140,190,255,0.3); border-radius: 26px; box-shadow: 0 0 60px rgba(95,227,255,0.15); }
+  .panel h2 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 46px); font-weight: 200; letter-spacing: 0.12em; }
+  .panel h2 b { font-weight: 800; color: var(--cyan); }
+  .panel p { color: var(--dim); line-height: 1.55; font-size: clamp(15px, 1.5vw, 18px); margin: 10px auto; max-width: 56ch; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; text-align: left; }
+  .steps div { background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 14px; padding: 12px; font-size: 14px; line-height: 1.4; color: var(--dim); }
+  .steps b { display: block; color: var(--ink); font-size: 22px; margin-bottom: 4px; }
+  .go {
+    margin-top: 12px; padding: 18px 44px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.4); font-size: 20px; font-weight: 800; letter-spacing: 0.06em;
+    background: linear-gradient(135deg, #1fb6ff, #7b5cff); box-shadow: 0 0 34px rgba(95,160,255,0.5);
+  }
+  .bigstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+  .bigstats > div { background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 16px; padding: 14px 8px; }
+  .bigstats .num { font-size: clamp(30px, 4vw, 48px); font-weight: 200; }
+  .mvp { display: flex; gap: 14px; align-items: center; text-align: left; background: rgba(255,255,255,0.05); border-radius: 16px; padding: 14px 16px; border: 2px solid; margin: 10px 0; }
+  .mvp .e { font-size: 40px; }
+  .board { margin: 14px auto 0; max-width: 360px; text-align: left; }
+  .board div { display: flex; justify-content: space-between; padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,0.07); font-variant-numeric: tabular-nums; }
+  .board div.me { color: var(--good); font-weight: 700; }
+  #initials { font: inherit; font-size: 22px; width: 7ch; text-align: center; text-transform: uppercase; letter-spacing: 0.2em; padding: 8px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(0,0,0,0.3); color: var(--ink); }
+  .small { font-size: 12px !important; color: var(--dim); }
+
+  @media (orientation: portrait), (max-width: 860px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "top" "map" "side"; }
+    #side { max-height: 30vh; flex-direction: row; overflow-x: auto; }
+    #side .card { min-width: 280px; }
+    #choices { grid-template-columns: repeat(3, 1fr); }
+    .steps, .bigstats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <h1>Mobile <b>Clinic</b> · Iowa</h1>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Clock · <span id="left">2:00 left</span></div><div class="num" id="clock">Mon 8:00 AM</div>
+        <div class="bar"><i id="weekBar"></i></div></div>
+      <div class="stat"><div class="lbl">Iowans helped</div><div class="num" id="helped">0</div></div>
+      <div class="stat"><div class="lbl">Counties</div><div class="num"><span id="served">0</span><span style="font-size:14px;color:var(--dim)"> / 99</span></div></div>
+      <a id="homeBtn" href="index.html" style="background:var(--glass);border:1px solid var(--edge);border-radius:14px;padding:8px 14px;color:var(--dim);font-size:13px;text-decoration:none;display:grid;place-items:center">⌂ All demos</a>
+      <button id="endBtn">⏹ End week</button>
+    </div>
+  </div>
+  <div id="mapWrap"><svg id="map" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <aside id="side">
+    <div class="card"><div class="lbl">Your mobile clinic teams</div><div id="roster"></div></div>
+    <div class="card"><div class="lbl">Dispatch log</div><div id="log"></div></div>
+  </aside>
+</div>
+
+<div id="sheet">
+  <h2 id="shTitle"></h2>
+  <div class="sub" id="shSub"></div>
+  <div class="q">Which DMU team should go?</div>
+  <div id="choices"></div>
+  <button id="cancel">Not now</button>
+</div>
+<div id="toast"></div>
+<div id="count"></div>
+
+<div class="overlay" id="start">
+  <div class="panel">
+    <h2>Mobile <b>Clinic</b></h2>
+    <p>Many people in rural Iowa live a long drive from a doctor or specialist. Mobile clinics bring care to them.
+       <b style="color:var(--ink)">You run DMU’s fleet for one week.</b> How many Iowans can you reach?</p>
+    <div class="steps">
+      <div><b>1</b>Health needs pop up in counties across Iowa. Tap one before its timer runs out.</div>
+      <div><b>2</b>Choose the right expert: physician, PA, physical therapist, podiatrist or public health.</div>
+      <div><b>3</b>The right team helps the most people. Watch your drive times, because Iowa is big!</div>
+    </div>
+    <button class="go" id="play">Start the week ▸</button>
+    <p class="small">County shapes are real. Patient numbers are made up for the game.</p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="end">
+  <div class="panel">
+    <div class="lbl">Friday · 6:00 PM</div>
+    <h2>The week is <b>over!</b></h2>
+    <div class="bigstats">
+      <div><div class="lbl">Iowans helped</div><div class="num" id="eHelped">0</div></div>
+      <div><div class="lbl">Counties reached</div><div class="num" id="eServed">0</div></div>
+      <div><div class="lbl">Perfect matches</div><div class="num" id="ePerfect">0</div></div>
+    </div>
+    <div id="eMvp"></div>
+    <p id="eMissed"></p>
+    <div id="eSave">
+      <div class="lbl" style="margin-top:8px">Put your initials on the board</div>
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
+        <input id="initials" maxlength="3" autocomplete="off" autocapitalize="characters" placeholder="ABC">
+        <button class="go" id="save" style="margin:0;padding:10px 22px;font-size:16px">Save</button>
+      </div>
+    </div>
+    <div class="board" id="board"></div>
+    <p class="small">Real world: rural communities rely on primary care doctors, PAs, therapists, podiatrists and public health workers. Every one of these is a career you can train for.</p>
+    <button class="go" id="again">Play again ▸</button>
+  </div>
+</div>
+
+<script>
+const IOWA={"W":1000,"H":647,"milesPerPx":0.3329,"cities":{"Des Moines":[464,396],"Sioux City":[35.9,207.4],"Council Bluffs":[119.1,464.4],"Cedar Rapids":[764.4,315.2],"Davenport":[932.2,410.5],"Dubuque":[919.9,207.4],"Mason City":[528.7,72.7],"Iowa City":[785.9,381.5],"Ames":[464,304.9],"Waterloo":[661.2,209.5]},"counties":[{"n":"Adair","d":"M297.4,413.8L368.2,413.9L368.2,485.7L332.8,485.7L297.4,485.5L298,449.7L297.4,413.8Z","x":333,"y":449.8,"a":5062},{"n":"Adams","d":"M262.6,485.5L297.4,485.5L332.8,485.7L332.8,539.1L262.6,538.9L262.6,485.5Z","x":297.7,"y":512.3,"a":3752},{"n":"Allamakee","d":"M773.4,0.2L834.2,0.2L831.4,9.4L835.8,16.2L836.4,31.5L851.3,38.8L858.5,52.3L848.5,63L845.2,72.3L840.2,76.6L840.2,87.2L774.5,86.9L773.4,32.9L773.4,0.2Z","x":809,"y":45,"a":6036},{"n":"Appanoose","d":"M544.5,539.4L615.3,539.3L615.3,603.2L603.6,603.4L544.5,604.6L544.5,539.4Z","x":579.8,"y":571.6,"a":4569},{"n":"Audubon","d":"M237.1,339.3L290.8,339.5L290.8,393.5L297.4,393.5L297.4,413.8L245.4,413.8L245.4,393.5L237.1,393.5L237.1,339.3Z","x":265.9,"y":376.4,"a":3961},{"n":"Benton","d":"M667.8,249.4L703.7,249.4L739.6,249.1L739.1,321.5L739.6,339.7L667.8,339.5L667.8,249.4Z","x":703.6,"y":294.4,"a":6459},{"n":"Black Hawk","d":"M628,178L700.9,178L700.9,214L703.7,214L703.7,249.4L667.8,249.4L631.3,249.6L631.3,213.8L628,213.8L628,195.8L628,178Z","x":665.9,"y":213.7,"a":5190},{"n":"Boone","d":"M380.3,267.6L416.3,267.6L452.2,267.8L452.2,339.3L433.9,339.3L380.3,339.3L380.3,267.6Z","x":416.2,"y":303.5,"a":5152},{"n":"Bremer","d":"M628,123L700.9,123L700.9,178L628,178L628,123Z","x":664.5,"y":150.5,"a":4010},{"n":"Buchanan","d":"M700.9,178L773.9,177.7L773.9,213.8L775.6,213.8L775.6,249.6L739.6,249.1L703.7,249.4L703.7,214L700.9,214L700.9,178Z","x":738.5,"y":213.4,"a":5177},{"n":"Buena Vista","d":"M191.8,122.5L264.8,122.5L264.8,194.9L191.8,194.6L191.8,122.5Z","x":228.3,"y":158.6,"a":5274},{"n":"Butler","d":"M555.6,123L628,123L628,178L628,195.8L555.6,195.7L555.6,123Z","x":591.8,"y":159.4,"a":5267},{"n":"Calhoun","d":"M264.8,194.9L337.2,195.3L337.2,212.9L344.4,212.9L344.4,267.8L308.5,267.6L273.1,267.6L273.6,212.8L264.8,212.8L264.8,194.9Z","x":306.9,"y":231.3,"a":5178},{"n":"Carroll","d":"M237.7,267.4L273.1,267.6L308.5,267.6L308.5,339.5L290.8,339.5L237.1,339.3L237.7,267.4Z","x":273,"y":303.5,"a":5110},{"n":"Cass","d":"M227.8,413.6L245.4,413.8L297.4,413.8L298,449.7L297.4,485.5L262.6,485.5L227.8,485.3L227.8,413.6Z","x":262.8,"y":449.6,"a":5010},{"n":"Cedar","d":"M810.9,340L810.9,321.9L883.4,322.2L883.4,358.4L882.8,394.5L810.9,394.3L810.9,340Z","x":847.1,"y":358.2,"a":5235},{"n":"Cerro Gordo","d":"M483.1,50.9L555.6,50.9L555.6,59.6L555.6,123L482.6,122.8L483.1,50.9Z","x":519.2,"y":86.9,"a":5238},{"n":"Cherokee","d":"M119.4,122.7L191.8,122.5L191.8,194.6L137.1,194.8L118.9,194.9L119.4,122.7Z","x":155.5,"y":158.7,"a":5241},{"n":"Chickasaw","d":"M628,59.6L700.9,59.6L700.9,86.7L700.9,123L628,123L628,59.6Z","x":664.4,"y":91.3,"a":4622},{"n":"Clarke","d":"M403.5,485.9L437.8,484.8L473.7,485L473.7,539.4L403,539.6L403.5,485.9Z","x":438.5,"y":512.3,"a":3831},{"n":"Clay","d":"M191.8,50.9L264.8,50.9L264.8,122.5L191.8,122.5L191.8,50.9Z","x":228.3,"y":86.7,"a":5227},{"n":"Clayton","d":"M774.5,86.9L840.2,87.2L843.6,106.3L845.2,123.6L851.9,128L857.4,155.4L870.6,166.3L883.4,171.1L883.4,177.3L846.9,177.1L773.9,177.7L774.5,86.9Z","x":815,"y":136,"a":7202},{"n":"Clinton","d":"M883.4,304.1L997.8,304.3L1000,309.2L996.1,320.1L998.3,325.8L993.4,343.2L993.9,350.5L984,356.1L972.9,367.3L958.5,367.1L949.1,358L938.6,357.5L932.6,361.1L917.6,360.5L911.6,366L900.5,358.4L883.4,358.4L883.4,322.2L883.4,304.1Z","x":939.8,"y":332.3,"a":6368},{"n":"Crawford","d":"M148.1,267.2L201.8,267.4L237.7,267.4L237.1,339.3L165.8,339.3L148.1,339.5L148.1,267.2Z","x":192.7,"y":303.3,"a":6428},{"n":"Dallas","d":"M362.1,339.5L380.3,339.3L433.9,339.3L433.9,393.8L437.8,393.8L437.8,412.1L421.2,414.1L368.2,413.9L368.2,393.8L362.6,393.6L362.1,339.5Z","x":399.3,"y":376.3,"a":5288},{"n":"Davis","d":"M615.3,539.3L686,539.1L686,601L659.5,601.8L615.3,603.2L615.3,539.3Z","x":650.5,"y":570.6,"a":4446},{"n":"Decatur","d":"M403,539.6L473.7,539.4L473.7,605.3L440,605.8L403,606.6L403,539.6Z","x":438.3,"y":572.7,"a":4694},{"n":"Delaware","d":"M773.9,177.7L846.9,177.1L847.4,249.8L811.5,249.6L775.6,249.6L775.6,213.8L773.9,213.8L773.9,177.7Z","x":811,"y":213.4,"a":5231},{"n":"Des Moines","d":"M810.4,502.9L875.6,503.3L875.6,503.8L876.2,515.8L872.9,534.6L866.8,538L859,549.8L853.5,554.6L850.2,581.3L824.2,569.5L822.6,565.4L804.3,557.1L810.4,557.1L810.4,502.9Z","x":839.7,"y":534.2,"a":3791},{"n":"Dickinson","d":"M191.8,0.2L264.8,0.2L264.8,50.9L191.8,50.9L191.8,0.2Z","x":228.3,"y":25.6,"a":3701},{"n":"Dubuque","d":"M846.9,177.1L883.4,177.3L883.4,171.1L912.7,179.6L922.6,199L922.6,205.6L922.6,214L934.8,220.2L935.9,224.9L948.6,232L919.3,231.8L919.3,250L883.4,250L847.4,249.8L846.9,177.1Z","x":885.7,"y":214,"a":5598},{"n":"Emmet","d":"M264.8,0.2L274.2,0L337.2,0L337.2,50.9L264.8,50.9L264.8,0.2Z","x":301,"y":25.5,"a":3684},{"n":"Fayette","d":"M700.9,123L700.9,86.7L774.5,86.9L773.9,177.7L700.9,178L700.9,123Z","x":737.5,"y":132.3,"a":6674},{"n":"Floyd","d":"M555.6,59.6L628,59.6L628,123L555.6,123L555.6,59.6Z","x":591.8,"y":91.3,"a":4590},{"n":"Franklin","d":"M482.6,122.8L555.6,123L555.6,195.7L482.6,195.5L482.6,122.8Z","x":519.1,"y":159.3,"a":5307},{"n":"Fremont","d":"M123.3,563.1L121.1,557.4L122.2,544.8L126,538.7L192.4,538.7L192.4,574.5L194.6,574.7L194,605.3L133.8,604.2L136,599.3L130.5,589.3L123.3,586.4L115,576.1L116.1,569.5L123.3,563.1Z","x":158.3,"y":571,"a":4588},{"n":"Greene","d":"M308.5,267.6L344.4,267.8L380.3,267.6L380.3,339.3L362.1,339.5L308.5,339.5L308.5,267.6Z","x":344.4,"y":303.6,"a":5153},{"n":"Grundy","d":"M555.6,195.7L628,195.8L628,213.8L631.3,213.8L631.3,249.6L595.4,249.6L595.4,267.6L559.4,267.8L558.9,213.5L555.6,213.5L555.6,195.7Z","x":591.6,"y":227.8,"a":4545},{"n":"Guthrie","d":"M290.8,339.5L308.5,339.5L362.1,339.5L362.6,393.6L368.2,393.8L368.2,413.9L297.4,413.8L297.4,393.5L290.8,393.5L290.8,339.5Z","x":328.3,"y":376.6,"a":5303},{"n":"Hamilton","d":"M410.2,195.5L482.6,195.5L482.6,213.5L488.1,213.5L488.1,267.8L452.2,267.8L416.3,267.6L416.3,213.3L409.6,213.3L410.2,195.5Z","x":450.7,"y":231.5,"a":5202},{"n":"Hancock","d":"M410.2,50.9L483.1,50.9L482.6,122.8L410.2,123L410.2,50.9Z","x":446.5,"y":86.9,"a":5231},{"n":"Hardin","d":"M482.6,195.5L555.6,195.7L555.6,213.5L558.9,213.5L559.4,267.8L524,267.8L488.1,267.8L488.1,213.5L482.6,213.5L482.6,195.5Z","x":522.5,"y":231.5,"a":5165},{"n":"Harrison","d":"M76.3,338.8L148.1,339.5L165.8,339.3L165.3,393.5L174.7,393.5L174.7,413.4L97.8,413.2L97.8,406.6L92.9,406.5L91.8,413L83.5,408.1L85.1,398.1L79,391.1L82.9,384.2L78.5,376.7L84.6,373.7L81.3,364.1L85.7,360.5L87.3,352.3L80.7,348.2L76.3,338.8Z","x":125.6,"y":376.6,"a":6271},{"n":"Henry","d":"M756.8,538.7L757.3,484.6L792.7,484.6L810.4,485L810.4,502.9L810.4,557.1L804.3,557.1L756.8,556.9L756.8,538.7Z","x":783.7,"y":520.9,"a":3864},{"n":"Howard","d":"M628.5,0.2L644.6,0.2L701.5,0L700.9,59.6L628,59.6L628.5,0.2Z","x":664.7,"y":29.9,"a":4339},{"n":"Humboldt","d":"M337.2,122.8L410.2,123L409.6,177.5L337.2,177.3L337.2,122.8Z","x":373.6,"y":150.1,"a":3962},{"n":"Ida","d":"M137.1,194.8L191.8,194.6L191.8,212.8L201.8,212.8L201.8,267.4L148.1,267.2L148.7,212.8L137.1,212.6L137.1,194.8Z","x":172.4,"y":230.9,"a":3899},{"n":"Iowa","d":"M667.8,339.5L739.6,339.7L740.2,393.8L739.6,412.3L721.9,412.5L667.8,412.7L667.2,357.5L667.8,339.5Z","x":703.7,"y":376.1,"a":5282},{"n":"Jackson","d":"M883.4,250L919.3,250L919.3,231.8L948.6,232L956.9,242.7L955.2,253.3L963.5,266.5L972.4,271L989.5,279.5L996.7,286.8L995.6,295.4L997.8,304.3L883.4,304.1L883.4,250Z","x":933.4,"y":275.5,"a":5848},{"n":"Jasper","d":"M505.8,339.5L524,339.5L595.4,339.5L595.4,393.6L597,393.6L597,412.9L579.3,412.9L509.1,413L509.1,393.8L505.8,393.8L505.8,339.5Z","x":551.2,"y":376.1,"a":6548},{"n":"Jefferson","d":"M686,484.6L721.9,484.4L757.3,484.6L756.8,538.7L686,539.1L686,484.6Z","x":721.5,"y":511.7,"a":3865},{"n":"Johnson","d":"M739.6,339.7L810.9,340L810.9,394.3L810.9,430.7L793.3,430.5L788.3,421L787.7,412.3L739.6,412.3L740.2,393.8L739.6,339.7Z","x":777.1,"y":379.2,"a":5536},{"n":"Jones","d":"M811.5,249.6L847.4,249.8L883.4,250L883.4,304.1L883.4,322.2L810.9,321.9L811.5,249.6Z","x":847.3,"y":286,"a":5217},{"n":"Keokuk","d":"M650.1,412.7L667.8,412.7L721.9,412.5L721.9,484.4L686,484.6L650.6,484.8L650.1,412.7Z","x":686.1,"y":448.6,"a":5150},{"n":"Kossuth","d":"M337.2,0L367.6,0.2L410.2,0.4L410.2,50.9L410.2,123L337.2,122.8L337.2,50.9L337.2,0Z","x":373.7,"y":61.6,"a":8956},{"n":"Lee","d":"M756.8,556.9L804.3,557.1L822.6,565.4L824.2,569.5L850.2,581.3L849.1,586.1L839.1,593.4L829.2,593.2L812.1,600.9L804.9,613.1L810.9,619.4L808.7,635.4L809.8,644.3L803.2,647.2L792.7,645.9L786.6,640.4L786.1,630.4L780.5,630.1L771.7,619.9L772.2,613.5L762.3,611L757.3,601.6L756.8,556.9Z","x":793.7,"y":592.5,"a":4771},{"n":"Linn","d":"M739.6,249.1L775.6,249.6L811.5,249.6L810.9,321.9L810.9,340L739.6,339.7L739.1,321.5L739.6,249.1Z","x":775.2,"y":294.6,"a":6488},{"n":"Louisa","d":"M793.3,430.5L810.9,430.7L810.9,448.6L856.3,449.2L850.2,468.8L861.2,483.9L868.4,485L875.6,498.3L875.6,503.3L810.4,502.9L810.4,485L792.7,484.6L793.3,430.5Z","x":827.5,"y":473.1,"a":3682},{"n":"Lucas","d":"M473.7,485L509.1,485L544.5,485L544.5,539.4L473.7,539.4L473.7,485Z","x":509.1,"y":512.2,"a":3852},{"n":"Lyon","d":"M5.5,0.2L27.6,0.2L89.6,0.2L118.9,0.2L118.9,50.4L82.4,50.6L12.2,50L8.3,42.6L16,41.7L16.6,22.1L4.4,10.7L8.3,4.1L5.5,0.2Z","x":65.4,"y":25,"a":5366},{"n":"Madison","d":"M368.2,413.9L421.2,414.1L437.8,412.1L437.8,484.8L403.5,485.9L368.2,485.7L368.2,413.9Z","x":403,"y":449.7,"a":4997},{"n":"Mahaska","d":"M579.3,412.9L597,412.9L650.1,412.7L650.6,484.8L614.7,485L579.3,485L579.3,412.9Z","x":614.8,"y":448.9,"a":5125},{"n":"Marion","d":"M509.1,413L579.3,412.9L579.3,485L544.5,485L509.1,485L509.1,416.6L509.1,413Z","x":544.2,"y":449,"a":5058},{"n":"Marshall","d":"M524,267.8L559.4,267.8L595.4,267.6L595.4,339.5L524,339.5L524,267.8Z","x":559.7,"y":303.6,"a":5123},{"n":"Mills","d":"M116.1,485.1L192.4,485.1L192.4,538.7L126,538.7L122.2,530.7L123.8,522.9L118.9,519.3L116.1,507.2L118.3,501.7L116.1,485.1Z","x":155.8,"y":511.3,"a":3912},{"n":"Mitchell","d":"M555.6,0.4L628.5,0.2L628,59.6L555.6,59.6L555.6,50.9L555.6,0.4Z","x":591.9,"y":29.9,"a":4308},{"n":"Monona","d":"M42.6,266.5L148.1,267.2L148.1,339.5L76.3,338.8L72.4,330.6L75.7,328.7L77.4,316.9L68.5,315.8L69.1,310.5L60.8,308.5L63.6,305.7L55.3,301.2L55.8,286.5L43.7,276.5L42.6,266.5Z","x":103.8,"y":300.2,"a":6280},{"n":"Monroe","d":"M544.5,485L579.3,485L614.7,485L615.3,539.3L544.5,539.4L544.5,485Z","x":579.7,"y":512.2,"a":3832},{"n":"Montgomery","d":"M192.4,485.1L227.8,485.3L262.6,485.5L262.6,538.9L192.4,538.7L192.4,485.1Z","x":227.5,"y":512,"a":3756},{"n":"Muscatine","d":"M810.9,430.7L810.9,394.3L882.8,394.5L901.1,394.7L900.5,424.4L891.1,423.9L878.4,431L871.2,428.3L860.7,432.1L856.3,449.2L810.9,448.6L810.9,430.7Z","x":850.3,"y":418,"a":4012},{"n":"O'Brien","d":"M118.9,50.4L191.8,50.9L191.8,122.5L119.4,122.7L118.9,104.5L118.9,50.4Z","x":155.3,"y":86.6,"a":5241},{"n":"Osceola","d":"M118.9,0.2L181.3,0L191.8,0.2L191.8,50.9L118.9,50.4L118.9,0.2Z","x":155.4,"y":25.4,"a":3685},{"n":"Page","d":"M192.4,538.7L262.6,538.9L262.6,574.9L264.8,574.9L264.8,606.4L220.6,605.7L194,605.3L194.6,574.7L192.4,574.5L192.4,538.7Z","x":228.5,"y":572.4,"a":4715},{"n":"Palo Alto","d":"M264.8,50.9L337.2,50.9L337.2,122.8L264.8,122.5L264.8,50.9Z","x":301,"y":86.8,"a":5195},{"n":"Plymouth","d":"M14.9,122.7L119.4,122.7L118.9,194.9L20.5,194.8L18.2,180.3L8.8,169.7L0.6,164.9L0,151.3L6.1,146.7L7.7,137.4L13.8,134.6L14.9,122.7Z","x":64.4,"y":158.3,"a":7866},{"n":"Pocahontas","d":"M264.8,122.5L337.2,122.8L337.2,177.3L337.2,195.3L264.8,194.9L264.8,122.5Z","x":301,"y":158.9,"a":5245},{"n":"Polk","d":"M433.9,339.3L452.2,339.3L505.8,339.5L505.8,393.8L509.1,393.8L509.1,413L509.1,416.6L495.9,416.2L491.4,413L437.8,412.1L437.8,393.8L433.9,393.8L433.9,339.3Z","x":471.1,"y":376.3,"a":5310},{"n":"Pottawattamie","d":"M97.8,413.2L174.7,413.4L227.8,413.6L227.8,485.3L192.4,485.1L116.1,485.1L122.2,482.1L109.5,478.7L111.1,471.3L108.3,460L115.5,452.7L104.5,447.9L107.2,437.3L107.8,422.1L96.7,420.3L97.8,413.2Z","x":167.9,"y":448.6,"a":8576},{"n":"Poweshiek","d":"M595.4,339.5L667.8,339.5L667.2,357.5L667.8,412.7L650.1,412.7L597,412.9L597,393.6L595.4,393.6L595.4,339.5Z","x":631.6,"y":376,"a":5252},{"n":"Ringgold","d":"M332.8,539.1L403,539.6L403,606.6L369.8,607.1L332.8,607.3L332.8,539.1Z","x":367.8,"y":573.2,"a":4751},{"n":"Sac","d":"M191.8,194.6L264.8,194.9L264.8,212.8L273.6,212.8L273.1,267.6L237.7,267.4L201.8,267.4L201.8,212.8L191.8,212.8L191.8,194.6Z","x":235.2,"y":230.9,"a":5228},{"n":"Scott","d":"M883.4,358.4L900.5,358.4L911.6,366L917.6,360.5L932.6,361.1L938.6,357.5L949.1,358L958.5,367.1L972.9,367.3L973.5,373.7L968.5,384.2L969,395.9L960.2,399.7L950.2,409.8L935.9,409.7L930.3,412L921.5,421.9L908.2,425L900.5,424.4L901.1,394.7L882.8,394.5L883.4,358.4Z","x":925.5,"y":386.1,"a":4158},{"n":"Shelby","d":"M165.8,339.3L237.1,339.3L237.1,393.5L245.4,393.5L245.4,413.8L227.8,413.6L174.7,413.4L174.7,393.5L165.3,393.5L165.8,339.3Z","x":203.7,"y":376.4,"a":5296},{"n":"Sioux","d":"M12.2,50L82.4,50.6L118.9,50.4L118.9,104.5L119.4,122.7L14.9,122.7L20.5,112.2L17.1,108.4L21.6,103.4L18.8,93.5L27.6,86.5L30.4,78.9L25.4,72.6L24.3,57.9L11.1,57.3L12.2,50Z","x":70.1,"y":86.7,"a":7036},{"n":"Story","d":"M452.2,267.8L488.1,267.8L524,267.8L524,339.5L505.8,339.5L452.2,339.3L452.2,267.8Z","x":488.1,"y":303.6,"a":5143},{"n":"Tama","d":"M631.3,249.6L667.8,249.4L667.8,339.5L595.4,339.5L595.4,267.6L595.4,249.6L631.3,249.6Z","x":631.6,"y":294.5,"a":6512},{"n":"Taylor","d":"M262.6,538.9L332.8,539.1L332.8,607.3L307.9,607.1L264.8,606.4L264.8,574.9L262.6,574.9L262.6,538.9Z","x":298.3,"y":572.7,"a":4697},{"n":"Union","d":"M332.8,485.7L368.2,485.7L403.5,485.9L403,539.6L332.8,539.1L332.8,485.7Z","x":368.1,"y":512.5,"a":3776},{"n":"Van Buren","d":"M686,539.1L756.8,538.7L756.8,556.9L757.3,601.6L755.1,598.4L722.5,600L686,601L686,539.1Z","x":721.3,"y":569.4,"a":4328},{"n":"Wapello","d":"M614.7,485L650.6,484.8L686,484.6L686,539.1L615.3,539.3L614.7,485Z","x":650.5,"y":512,"a":3862},{"n":"Warren","d":"M437.8,412.1L491.4,413L495.9,416.2L509.1,416.6L509.1,485L473.7,485L437.8,484.8L437.8,412.1Z","x":473.1,"y":449.2,"a":5102},{"n":"Washington","d":"M721.9,412.5L739.6,412.3L787.7,412.3L788.3,421L793.3,430.5L792.7,484.6L757.3,484.6L721.9,484.4L721.9,412.5Z","x":757.1,"y":448.8,"a":5071},{"n":"Wayne","d":"M473.7,539.4L544.5,539.4L544.5,604.6L501.9,605.3L473.7,605.3L473.7,539.4Z","x":509,"y":572.2,"a":4651},{"n":"Webster","d":"M337.2,177.3L409.6,177.5L410.2,195.5L409.6,213.3L416.3,213.3L416.3,267.6L380.3,267.6L344.4,267.8L344.4,212.9L337.2,212.9L337.2,195.3L337.2,177.3Z","x":377.6,"y":222.4,"a":6515},{"n":"Winnebago","d":"M410.2,0.4L459.9,0.4L483.1,0.4L483.1,50.9L410.2,50.9L410.2,0.4Z","x":446.6,"y":25.6,"a":3681},{"n":"Winneshiek","d":"M700.9,59.6L701.5,0L755.1,0L773.4,0.2L773.4,32.9L774.5,86.9L700.9,86.7L700.9,59.6Z","x":737.4,"y":43.6,"a":6303},{"n":"Woodbury","d":"M20.5,194.8L118.9,194.9L137.1,194.8L137.1,212.6L148.7,212.8L148.1,267.2L42.6,266.5L47.5,263.5L42.6,253.7L39.8,245.2L33.7,240L33.7,226.5L38.7,218.6L36.5,210.8L28.7,209.4L21.6,203.8L23.8,195.8L20.5,194.8Z","x":90.5,"y":230.3,"a":7927},{"n":"Worth","d":"M483.1,0.4L551.7,0.4L555.6,0.4L555.6,50.9L483.1,50.9L483.1,0.4Z","x":519.4,"y":25.6,"a":3661},{"n":"Wright","d":"M409.6,177.5L410.2,123L482.6,122.8L482.6,195.5L410.2,195.5L409.6,177.5Z","x":446.3,"y":159.2,"a":5278}]};
+
+</script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------------- game content ---------------- */
+const TEAMS = [
+  { id: 'DO', name: 'Osteopathic Physician', icon: '🩺', color: '#5fe3ff',
+    career: 'Doctors of Osteopathic Medicine (DOs) diagnose and treat the whole person, including hands-on treatment of muscles and joints.' },
+  { id: 'PA', name: 'Physician Assistant', icon: '🧑‍⚕️', color: '#7dffa8',
+    career: 'Physician Assistants examine, diagnose and treat patients as part of a medical team. Many rural clinics rely on PAs.' },
+  { id: 'DPT', name: 'Physical Therapist', icon: '🦵', color: '#ffd35f',
+    career: 'Physical Therapists help people move, heal and get stronger after injuries and surgeries.' },
+  { id: 'DPM', name: 'Podiatrist', icon: '🦶', color: '#ff8a5f',
+    career: 'Podiatrists are foot and ankle doctors, especially important for people living with diabetes.' },
+  { id: 'MPH', name: 'Public Health', icon: '💉', color: '#c58bff',
+    career: 'Public Health professionals protect whole communities with vaccines, safe water and disease tracking.' },
+];
+const TEAM = Object.fromEntries(TEAMS.map((t) => [t.id, t]));
+
+const NEEDS = [
+  { t: 'Chest pain & high blood pressure', i: '❤️', best: 'DO', ok: ['PA'], tip: 'Heart symptoms need a physician (DO) to diagnose and treat.' },
+  { t: 'Farmer with severe back pain', i: '🌾', best: 'DO', ok: ['DPT'], tip: 'DOs are trained in osteopathic manipulative treatment, hands-on care for back pain.' },
+  { t: 'School sports physicals', i: '🏈', best: 'PA', ok: ['DO'], tip: 'PAs perform many of the check-ups and physicals in rural clinics.' },
+  { t: 'Flu spreading in a nursing home', i: '🤒', best: 'PA', ok: ['DO', 'MPH'], tip: 'PAs can diagnose and treat flu. Public health helps stop the spread.' },
+  { t: 'Recovery after knee surgery', i: '🦿', best: 'DPT', ok: [], tip: 'Physical therapists rebuild strength and movement after surgery.' },
+  { t: 'Farm injury rehab', i: '🚜', best: 'DPT', ok: ['DO'], tip: 'Physical therapists help injured workers get back to the farm safely.' },
+  { t: 'Diabetic foot check', i: '🦶', best: 'DPM', ok: [], tip: 'Podiatrists catch foot problems early. For people with diabetes, that can prevent amputations.' },
+  { t: 'Sprained ankle', i: '🩹', best: 'DPM', ok: ['DPT'], tip: 'Podiatrists are the foot and ankle doctors.' },
+  { t: 'Community vaccination clinic', i: '💉', best: 'MPH', ok: ['PA'], tip: 'Public health teams organize vaccines for a whole community.' },
+  { t: 'Well-water safety testing', i: '🚰', best: 'MPH', ok: [], tip: 'Many rural homes use private wells. Public health teams test the water to keep families safe.' },
+];
+const URBAN = new Set(['Polk', 'Linn', 'Scott', 'Johnson', 'Black Hawk', 'Woodbury', 'Story', 'Dubuque', 'Pottawattamie', 'Dallas']);
+
+/* ---------------- timing (game units) ---------------- */
+const DURATION = 120;          // seconds of real time = one work week
+const SEC_PER_HOUR = DURATION / 50;   // Mon–Fri, 8 AM – 6 PM
+const MPH = 60, ROAD = 1.25;   // average speed, road winding factor
+const NEED_LIFE = 30, TREAT_HOURS = 1.6, MAX_NEEDS = 7;
+
+/* ---------------- map ---------------- */
+const map = $('map');
+map.setAttribute('viewBox', `-24 -24 ${IOWA.W + 48} ${IOWA.H + 48}`);
+const defs = el('defs', {}, map);
+defs.innerHTML = `
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <radialGradient id="base"><stop offset="0" stop-color="#fff"/><stop offset="0.35" stop-color="#5fe3ff"/><stop offset="1" stop-color="#5fe3ff" stop-opacity="0"/></radialGradient>`;
+const gState = el('g', { class: 'state' }, map);
+const countyEl = {}, countyByName = {};
+for (const c of IOWA.counties) {
+  const p = el('path', { d: c.d, class: 'county' }, gState);
+  p.addEventListener('click', () => { const n = needs.find((n) => n.county === c && !n.van); if (n) openSheet(n); });
+  countyEl[c.n] = p; countyByName[c.n] = c;
+}
+const gLabels = el('g', {}, map);
+for (const c of IOWA.counties) {
+  const nearCity = Object.values(IOWA.cities).some(([x, y]) => Math.hypot(x - c.x, y - c.y) < 28);
+  const t = el('text', { x: c.x, y: c.y + (nearCity ? 22 : 3), class: 'clabel' }, gLabels); t.textContent = c.n;
+}
+const gCities = el('g', {}, map);
+for (const [name, [x, y]] of Object.entries(IOWA.cities)) {
+  if (name === 'Des Moines') continue;
+  const g = el('g', { class: 'city' }, gCities);
+  el('circle', { cx: x, cy: y, r: 2.2 }, g);
+  const t = el('text', { x: x + 5, y: y - 4 }, g); t.textContent = name;
+}
+const [BX, BY] = IOWA.cities['Des Moines'];
+const gBase = el('g', {}, map);
+el('circle', { cx: BX, cy: BY, r: 34, fill: 'url(#base)', opacity: 0.55 }, gBase);
+el('circle', { cx: BX, cy: BY, r: 6, fill: '#fff', filter: 'url(#glow)' }, gBase);
+const bt = el('text', { x: BX, y: BY - 14, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 800, fill: '#5fe3ff', 'letter-spacing': '0.12em', filter: 'url(#glow)' }, gBase);
+bt.textContent = 'DMU';
+const gRoutes = el('g', {}, map), gNeeds = el('g', {}, map), gVans = el('g', {}, map), gFx = el('g', { class: 'fx' }, map);
+
+/* ---------------- sound ---------------- */
+let ac = null;
+function audio() { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { ac = null; } }
+function tone(f, d, v, type = 'sine', f2) {
+  if (!ac) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d + 0.05);
+}
+const sfx = {
+  spawn: () => { tone(880, 0.12, 0.06); setTimeout(() => tone(1320, 0.12, 0.05), 90); },
+  go: () => tone(240, 0.35, 0.08, 'sawtooth', 720),
+  arrive: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.18, 0.07, 'triangle'), i * 70)),
+  miss: () => tone(200, 0.4, 0.08, 'square', 110),
+};
+
+/* ---------------- state ---------------- */
+let vans, needs, gameT, running, paused, helped, servedSet, perfect, missed, teamHelped, spawnTimer, logLines;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+// Iowa's rural roads are a grid, so vans drive east–west, then north–south
+const driveHours = (van, c) => (Math.abs(van.x - c.x) + Math.abs(van.y - c.y)) * IOWA.milesPerPx * 1.08 / MPH;
+
+function makeVan(t) {
+  const g = el('g', { class: 'van' }, gVans);
+  const body = el('g', {}, g);
+  body.innerHTML = `
+    <ellipse cx="0" cy="13.5" rx="25" ry="3.5" fill="rgba(0,0,0,0.5)"/>
+    <rect x="-23" y="-12" width="34" height="23" rx="3.5" fill="#f3f6fb" stroke="#0a1430" stroke-width="1"/>
+    <path d="M11,-6 h7 q4,0 5.2,4 l2,6.5 v6.5 h-14.2 z" fill="#f3f6fb" stroke="#0a1430" stroke-width="1"/>
+    <path d="M13,-4 h5 q2.6,0 3.4,2.7 l1.1,3.6 h-9.5 z" fill="#8fdcff"/>
+    <rect x="-23" y="2" width="48.4" height="4" fill="${t.color}"/>
+    <rect x="-6" y="-8.5" width="9" height="3" fill="#e8253b"/><rect x="-3" y="-11.5" width="3" height="9" fill="#e8253b"/>
+    <rect class="lt a" x="-8" y="-16" width="7" height="3.5" rx="1.2" fill="#ff2d45"/>
+    <rect class="lt b" x="-1" y="-16" width="7" height="3.5" rx="1.2" fill="#2f7dff"/>
+    <g class="wh"><circle r="4.4" fill="#111"/><circle r="2" fill="#aab4c4"/><rect x="-0.6" y="-4" width="1.2" height="8" fill="#555"/></g>
+    <g class="wh"><circle r="4.4" fill="#111"/><circle r="2" fill="#aab4c4"/><rect x="-0.6" y="-4" width="1.2" height="8" fill="#555"/></g>`;
+  const label = el('text', { y: -4.5, 'font-size': 6.5, 'font-weight': 900, fill: '#0a1430', 'letter-spacing': '0.06em' }, g);
+  label.textContent = 'DMU';
+  const badge = el('g', { transform: 'translate(0,-27)' }, g);
+  el('circle', { r: 9.5, fill: '#0a1430', stroke: t.color, 'stroke-width': 2 }, badge);
+  const ic = el('text', { 'font-size': 10.5 }, badge); ic.textContent = t.icon;
+  return { g, body, label, wheels: [...body.querySelectorAll('.wh')], lights: [...body.querySelectorAll('.lt')] };
+}
+const fmtH = (h) => { const m = Math.max(5, Math.round(h * 60 / 5) * 5); return (m >= 60 ? Math.floor(m / 60) + 'h ' : '') + (m % 60 ? (m % 60) + 'm' : '').trim(); };
+
+function newGame() {
+  gRoutes.innerHTML = gNeeds.innerHTML = gVans.innerHTML = gFx.innerHTML = '';
+  for (const c of IOWA.counties) countyEl[c.n].style.fill = '';
+  vans = TEAMS.map((t) => ({ team: t, ...makeVan(t), x: BX, y: BY, state: 'idle', where: 'DMU', facing: 1, spin: 0 }));
+  lastCount = null; $('count').className = '';
+  needs = []; gameT = 0; helped = 0; servedSet = new Set(); perfect = 0; missed = 0; spawnTimer = 1.5; logLines = [];
+  teamHelped = Object.fromEntries(TEAMS.map((t) => [t.id, 0]));
+  $('helped').textContent = '0'; $('served').textContent = '0'; $('log').innerHTML = '';
+  log('Your five teams are ready at <b>DMU</b> in Des Moines.');
+  running = true; paused = false;
+}
+
+function log(html) {
+  logLines.unshift(html); logLines = logLines.slice(0, 5);
+  $('log').innerHTML = logLines.map((l) => `<div>${l}</div>`).join('');
+}
+let toastTimer;
+function toast(html, kind) {
+  const t = $('toast'); t.innerHTML = html; t.className = 'on ' + (kind || '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ''), 3800);
+}
+
+/* ---------------- needs ---------------- */
+function spawnNeed() {
+  if (needs.length >= MAX_NEEDS) return;
+  const busy = new Set(needs.map((n) => n.county.n));
+  const pool = IOWA.counties.filter((c) => !busy.has(c.n));
+  let total = 0; const w = pool.map((c) => (total += URBAN.has(c.n) ? 0.12 : 1));
+  const r = Math.random() * total, county = pool[w.findIndex((x) => x >= r)];
+  const kind = NEEDS[Math.random() * NEEDS.length | 0];
+  const n = { county, kind, people: 8 + (Math.random() * 25 | 0), life: NEED_LIFE, van: null };
+  const g = el('g', { class: 'need', transform: `translate(${county.x},${county.y})` }, gNeeds);
+  el('circle', { r: 16, class: 'pulse', fill: 'none', stroke: '#ff5d73', 'stroke-width': 2 }, g);
+  el('circle', { r: 17, fill: '#170a1c', stroke: 'rgba(255,255,255,0.15)', 'stroke-width': 1 }, g);
+  n.ring = el('circle', { r: 17, fill: 'none', stroke: '#ff5d73', 'stroke-width': 3.5, 'stroke-linecap': 'round', transform: 'rotate(-90)', 'stroke-dasharray': 106.8, 'stroke-dashoffset': 0 }, g);
+  const ic = el('text', { class: 'ic' }, g); ic.textContent = kind.i;
+  const nm = el('text', { class: 'nm', y: 31 }, g); nm.textContent = county.n;
+  g.addEventListener('click', (e) => { e.stopPropagation(); if (!n.van) openSheet(n); });
+  n.g = g; n.pulse = g.firstChild;
+  needs.push(n);
+  sfx.spawn();
+}
+
+function removeNeed(n) { n.g.remove(); needs = needs.filter((x) => x !== n); }
+
+/* ---------------- dispatch sheet ---------------- */
+let sheetNeed = null;
+function openSheet(n) {
+  audio(); sheetNeed = n; paused = true;
+  $('shTitle').textContent = `${n.kind.i}  ${n.kind.t}`;
+  $('shSub').textContent = `${n.county.n} County · about ${n.people} people waiting`;
+  const box = $('choices'); box.innerHTML = '';
+  for (const v of vans) {
+    const t = v.team, b = document.createElement('button');
+    b.className = 'choice'; b.style.borderColor = t.color;
+    const free = v.state === 'idle';
+    b.disabled = !free;
+    b.innerHTML = `<span class="e">${t.icon}</span><span class="s" style="color:${t.color}">${t.id}</span><span class="f">${t.name}</span>
+      <span class="d">${free ? '🚐 ' + fmtH(driveHours(v, n.county)) + ' drive' : (v.state === 'driving' ? 'on the road' : 'treating patients')}</span>`;
+    b.addEventListener('click', () => dispatch(v, n));
+    box.appendChild(b);
+  }
+  $('sheet').classList.add('open');
+}
+function closeSheet() { $('sheet').classList.remove('open'); sheetNeed = null; paused = false; }
+$('cancel').addEventListener('click', closeSheet);
+
+function dispatch(v, n) {
+  closeSheet();
+  const match = v.team.id === n.kind.best ? 'best' : n.kind.ok.includes(v.team.id) ? 'ok' : 'wrong';
+  n.van = v; n.match = match;
+  v.state = 'driving'; v.need = n;
+  v.from = [v.x, v.y]; v.t0 = gameT; v.dur = Math.max(0.8, driveHours(v, n.county) * SEC_PER_HOUR);
+  v.path = [[v.x, v.y], [n.county.x, v.y], [n.county.x, n.county.y]];
+  v.len1 = Math.abs(n.county.x - v.x); v.len = v.len1 + Math.abs(n.county.y - v.y);
+  v.route = el('polyline', { fill: 'none', stroke: v.team.color, 'stroke-width': 2.5, 'stroke-dasharray': '7 6', 'stroke-linejoin': 'round', opacity: 0.85, filter: 'url(#glow)' }, gRoutes);
+  n.ring.setAttribute('stroke', v.team.color); n.pulse.setAttribute('stroke', v.team.color);
+  const best = TEAM[n.kind.best];
+  if (match === 'best') toast(`✅ <b>Perfect match!</b> ${n.kind.tip}`, 'good');
+  else if (match === 'ok') toast(`👍 <b>${v.team.name}</b> can help, but the expert is a <b style="color:${best.color}">${best.name}</b>. ${n.kind.tip}`, 'meh');
+  else toast(`🤔 They’ll do what they can, but this needs a <b style="color:${best.color}">${best.name}</b>. ${n.kind.tip}`, 'meh');
+  log(`${v.team.icon} <b>${v.team.id}</b> heading to <b>${n.county.n}</b> (${fmtH(driveHours({ x: v.from[0], y: v.from[1] }, n.county))})`);
+  sfx.go();
+}
+
+/* ---------------- effects ---------------- */
+const fxList = [];
+function burst(x, y, color, text) {
+  const ring = el('circle', { cx: x, cy: y, r: 10, fill: 'none', stroke: color, 'stroke-width': 3 }, gFx);
+  const t = el('text', { x, y: y - 20, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 800, fill: color, filter: 'url(#glow)' }, gFx);
+  t.textContent = text;
+  fxList.push({ ring, t, y, age: 0 });
+}
+function updateFx(dt) {
+  for (const f of fxList) {
+    f.age += dt; const k = f.age / 1.6;
+    f.ring.setAttribute('r', 10 + 60 * k); f.ring.setAttribute('opacity', Math.max(0, 1 - k));
+    f.t.setAttribute('y', f.y - 20 - 34 * k); f.t.setAttribute('opacity', Math.max(0, 1 - k * k));
+  }
+  for (let i = fxList.length - 1; i >= 0; i--) if (fxList[i].age > 1.6) { fxList[i].ring.remove(); fxList[i].t.remove(); fxList.splice(i, 1); }
+}
+
+/* ---------------- main loop ---------------- */
+function update(dt) {
+  gameT += dt;
+  // spawn faster as the week goes on
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) { spawnNeed(); spawnTimer = 5.2 - 2.4 * (gameT / DURATION) + Math.random() * 1.2; }
+
+  for (const n of [...needs]) {
+    if (n.van) continue;
+    n.life -= dt;
+    n.ring.setAttribute('stroke-dashoffset', 106.8 * (1 - Math.max(0, n.life) / NEED_LIFE));
+    if (n.life < 8) n.ring.setAttribute('stroke', '#ff2d45');
+    if (n.life <= 0) {
+      missed++; removeNeed(n); sfx.miss();
+      log(`⚠️ <b>${n.county.n}</b> went without care.`);
+    }
+  }
+
+  for (const v of vans) {
+    if (v.state === 'driving') {
+      const k = Math.min(1, (gameT - v.t0) / v.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const c = v.need.county, s = e * v.len, [p0, p1, p2] = v.path;
+      if (s <= v.len1 && v.len1 > 0) {
+        const f = s / v.len1; v.x = p0[0] + (p1[0] - p0[0]) * f; v.y = p0[1];
+        if (Math.abs(p1[0] - p0[0]) > 0.5) v.facing = p1[0] > p0[0] ? 1 : -1;
+        v.route.setAttribute('points', `${v.x},${v.y} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}`);
+      } else {
+        const l2 = v.len - v.len1, f = l2 > 0 ? (s - v.len1) / l2 : 1;
+        v.x = p1[0]; v.y = p1[1] + (p2[1] - p1[1]) * f;
+        v.route.setAttribute('points', `${v.x},${v.y} ${p2[0]},${p2[1]}`);
+      }
+      v.spin += dt * 900;
+      if (k >= 1) { v.state = 'treating'; v.t0 = gameT; v.route.remove(); v.where = c.n; v.x = c.x; v.y = c.y; }
+    } else if (v.state === 'treating') {
+      const n = v.need, k = Math.min(1, (gameT - v.t0) / (TREAT_HOURS * SEC_PER_HOUR));
+      n.ring.setAttribute('stroke-dashoffset', 106.8 * (1 - k));
+      if (k >= 1) {
+        const gained = Math.round(n.people * (n.match === 'best' ? 1 : n.match === 'ok' ? 0.6 : 0.3));
+        helped += gained; teamHelped[v.team.id] += gained; if (n.match === 'best') perfect++;
+        servedSet.add(n.county.n);
+        countyEl[n.county.n].style.fill = v.team.color + '55';
+        burst(n.county.x, n.county.y, v.team.color, '+' + gained);
+        sfx.arrive();
+        log(`${v.team.icon} Helped <b>${gained}</b> people in <b>${n.county.n}</b>`);
+        removeNeed(n); v.state = 'idle'; v.need = null;
+        $('helped').textContent = helped.toLocaleString(); $('served').textContent = servedSet.size;
+      }
+    }
+  }
+  if (gameT >= DURATION) endGame();
+}
+
+function render() {
+  // vans: offset vans that share a spot so they don't overlap
+  const groups = {};
+  for (const v of vans) if (v.state !== 'driving') (groups[Math.round(v.x) + ',' + Math.round(v.y)] ||= []).push(v);
+  for (const v of vans) {
+    let ox = 0, oy = 0;
+    if (v.state !== 'driving') {
+      const grp = groups[Math.round(v.x) + ',' + Math.round(v.y)], i = grp.indexOf(v);
+      if (grp.length > 1) { ox = ((i % 2) - 0.5) * 58; oy = 34 + Math.floor(i / 2) * 44; }   // parked in rows
+      else { ox = 0; oy = 40; }                                                              // parked beside the patients
+    }
+    v.ox = ox; v.oy = oy;
+  }
+  drawVans();
+  // roster
+  $('roster').innerHTML = vans.map((v) => {
+    const s = v.state === 'idle' ? `Ready · ${v.where}` : v.state === 'driving' ? `Driving to ${v.need.county.n}` : `Treating in ${v.need.county.n}`;
+    return `<div class="team"><div class="ic" style="border-color:${v.team.color}">${v.team.icon}</div>
+      <div><div class="nm" style="color:${v.team.color}">${v.team.id} · ${v.team.name}</div><div class="st">${s}</div></div></div>`;
+  }).join('');
+  // clock
+  const hours = Math.min(49.99, gameT / SEC_PER_HOUR), day = Math.floor(hours / 10), h = 8 + (hours % 10);
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 4) * 15, ampm = hh >= 12 ? 'PM' : 'AM', h12 = ((hh + 11) % 12) + 1;
+  $('clock').textContent = `${['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][day]} ${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
+  const remain = Math.max(0, DURATION - gameT), urgent = running && remain < 12;
+  $('clock').classList.toggle('urgent', urgent);
+  $('left').textContent = `${Math.floor(remain / 60)}:${String(Math.floor(remain % 60)).padStart(2, '0')} left`;
+  $('weekBar').style.width = (100 * gameT / DURATION).toFixed(1) + '%';
+  $('weekBar').classList.toggle('urgent', urgent);
+  const c = Math.ceil(remain);
+  if (running && c <= 5 && c >= 1 && c !== lastCount) {
+    lastCount = c; const el2 = $('count'); el2.textContent = c;
+    el2.className = ''; void el2.offsetWidth; el2.className = 'on';
+    tone(c === 1 ? 1200 : 800, 0.12, 0.08, 'square');
+  }
+}
+let lastCount = null;
+$('endBtn').addEventListener('click', () => { if (running) endGame(); });
+
+let last = performance.now(), rosterTick = 0;
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (running && !paused) update(dt);
+  updateFx(dt);
+  if (running && (rosterTick++ % 4 === 0)) render(); else if (running) renderVansOnly();
+  requestAnimationFrame(loop);
+}
+function renderVansOnly() { drawVans(); }
+function drawVans() {
+  const t = performance.now() / 1000;
+  for (const v of vans) {
+    const driving = v.state === 'driving';
+    const ox = driving ? 0 : (v.ox || 0), oy = driving ? 0 : (v.oy || 0);
+    const bob = driving && running && !paused ? Math.sin(t * 22 + v.team.id.length) * 0.7 : 0;
+    v.g.setAttribute('transform', `translate(${(v.x + ox).toFixed(1)},${(v.y + oy + bob).toFixed(1)})`);
+    v.body.setAttribute('transform', `scale(${v.facing},1)`);
+    v.label.setAttribute('x', -14 * v.facing);
+    v.label.setAttribute('text-anchor', 'middle');
+    v.wheels[0].setAttribute('transform', `translate(-13,11) rotate(${v.spin.toFixed(0)})`);
+    v.wheels[1].setAttribute('transform', `translate(16,11) rotate(${v.spin.toFixed(0)})`);
+    const on = Math.floor(t * 6) % 2;
+    v.lights[0].setAttribute('opacity', driving ? (on ? 1 : 0.25) : 0.35);
+    v.lights[1].setAttribute('opacity', driving ? (on ? 0.25 : 1) : 0.35);
+    v.lights[0].setAttribute('filter', driving && on ? 'url(#glow)' : '');
+    v.lights[1].setAttribute('filter', driving && !on ? 'url(#glow)' : '');
+  }
+}
+
+/* ---------------- end + leaderboard ---------------- */
+const KEY = 'mobile-clinic-iowa-scores';
+const loadBoard = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } };
+const saveBoard = (b) => { try { localStorage.setItem(KEY, JSON.stringify(b)); } catch (e) { /* storage unavailable */ } };
+let myEntry = null;
+function showBoard() {
+  const b = loadBoard();
+  $('board').innerHTML = b.length ? '<div class="lbl" style="border:0">Today’s top clinics</div>' +
+    b.map((e, i) => `<div class="${e === myEntry || (myEntry && e.id === myEntry.id) ? 'me' : ''}"><span>${i + 1}. ${e.name}</span><span>${e.score.toLocaleString()} Iowans · ${e.counties} counties</span></div>`).join('') : '';
+}
+function endGame() {
+  running = false; closeSheet();
+  $('eHelped').textContent = helped.toLocaleString(); $('eServed').textContent = servedSet.size; $('ePerfect').textContent = perfect;
+  const mvp = TEAMS.slice().sort((a, b) => teamHelped[b.id] - teamHelped[a.id])[0];
+  $('eMvp').innerHTML = helped ? `<div class="mvp" style="border-color:${mvp.color}"><span class="e">${mvp.icon}</span>
+    <div><div class="lbl">Your MVP team · could this be your career?</div><div style="font-weight:700;color:${mvp.color};font-size:18px">${mvp.name}</div>
+    <div style="color:var(--dim);font-size:14px;line-height:1.45">${mvp.career}</div></div></div>` : '';
+  $('eMissed').textContent = missed ? `${missed} communities didn’t get a visit this week. Real rural clinics face this choice every day: there are only so many providers and so many hours.` : 'You didn’t miss a single community. Outstanding!';
+  myEntry = null; $('eSave').style.display = helped ? '' : 'none'; $('initials').value = '';
+  showBoard();
+  $('end').classList.remove('hidden');
+  [392, 523, 659, 784].forEach((f, i) => setTimeout(() => tone(f, 0.3, 0.07, 'triangle'), i * 120));
+}
+$('save').addEventListener('click', () => {
+  const name = ($('initials').value || '???').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || '???';
+  myEntry = { id: Date.now(), name, score: helped, counties: servedSet.size };
+  const b = loadBoard(); b.push(myEntry); b.sort((x, y) => y.score - x.score); saveBoard(b.slice(0, 8));
+  $('eSave').style.display = 'none'; showBoard();
+});
+function start() { audio(); $('start').classList.add('hidden'); $('end').classList.add('hidden'); newGame(); render(); }
+$('play').addEventListener('click', start);
+$('again').addEventListener('click', start);
+
+// draw an idle fleet behind the start screen
+newGame(); running = false; render();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

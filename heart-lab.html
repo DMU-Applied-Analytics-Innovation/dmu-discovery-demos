@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Heart Lab</title>
+<style>
+  :root {
+    --ink: #eef3ff;
+    --dim: rgba(238, 243, 255, 0.64);
+    --glass: rgba(14, 20, 40, 0.55);
+    --edge: rgba(150, 180, 255, 0.18);
+    --ok: #3dff8f;
+    --bad: #ff3b4e;
+    --warn: #ffb03b;
+    --panel-w: clamp(300px, 27vw, 400px);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #03050c; color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  #layout {
+    position: fixed; inset: 0; display: grid; pointer-events: none;
+    grid-template-columns: 1fr var(--panel-w);
+    grid-template-rows: auto 1fr clamp(110px, 17vh, 170px);
+    grid-template-areas: "title panel" "stage panel" "ecg panel";
+    padding: max(16px, env(safe-area-inset-top)) 18px max(16px, env(safe-area-inset-bottom)) 22px;
+    gap: 12px 20px;
+  }
+  #title { grid-area: title; }
+  h1 { margin: 0; font-size: clamp(22px, 2.6vw, 34px); font-weight: 200; letter-spacing: 0.32em; text-transform: uppercase; }
+  h1 b { font-weight: 700; color: #ff5a6e; text-shadow: 0 0 18px rgba(255, 70, 90, 0.7); }
+  #title p { margin: 4px 0 0; color: var(--dim); font-size: clamp(13px, 1.2vw, 16px); }
+  #stage { grid-area: stage; }
+
+  #ecgWrap {
+    grid-area: ecg; position: relative; border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--edge); background-color: rgba(0, 12, 6, 0.75);
+    background-image:
+      linear-gradient(rgba(61, 255, 143, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(61, 255, 143, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  #ecg { width: 100%; height: 100%; display: block; }
+  #ecgLabel { position: absolute; left: 14px; top: 9px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(61,255,143,0.75); }
+
+  #panel {
+    grid-area: panel; pointer-events: auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card {
+    background: var(--glass); border: 1px solid var(--edge); border-radius: 18px; padding: 16px 18px;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  }
+  .lbl { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+  #rhythm { font-size: clamp(20px, 1.9vw, 26px); font-weight: 700; margin-top: 4px; color: var(--ok); transition: color 0.3s; }
+  #rhythm.bad { color: var(--bad); animation: blink 0.8s steps(2) infinite; }
+  #rhythm.warn { color: var(--warn); }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  .vitals { display: flex; gap: 22px; margin-top: 10px; align-items: flex-end; }
+  .big { font-size: clamp(38px, 3.8vw, 54px); font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1; }
+  .big small { font-size: 14px; color: var(--dim); margin-left: 4px; }
+  #arrest { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--edge); }
+  #arrest .big { color: var(--bad); font-size: clamp(28px, 2.6vw, 36px); }
+  #story h2 { margin: 2px 0 6px; font-size: 18px; }
+  #story p { margin: 0; line-height: 1.5; color: var(--dim); font-size: 15px; }
+  #story p b { color: var(--ink); }
+
+  button {
+    font: inherit; color: var(--ink); cursor: pointer; border-radius: 14px; border: 1px solid var(--edge);
+    background: rgba(255, 255, 255, 0.06); padding: 13px 14px; font-size: 15px; width: 100%;
+    -webkit-tap-highlight-color: transparent; transition: transform 0.08s, background 0.2s;
+  }
+  button:active { transform: scale(0.97); }
+  #defib {
+    font-size: clamp(18px, 1.7vw, 22px); font-weight: 800; letter-spacing: 0.08em; padding: 18px;
+    background: linear-gradient(180deg, #ff4258, #b3101f); border-color: rgba(255,160,170,0.6);
+    box-shadow: 0 0 28px rgba(255, 50, 70, 0.45), inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+  #defib.charging { background: linear-gradient(180deg, #ffcf4a, #d98a00); color: #2a1600; }
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tools button.on { background: rgba(200, 200, 210, 0.25); border-color: rgba(255,255,255,0.6); }
+  .rates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  .rates button { padding: 10px 4px; font-size: 13px; }
+  .rates button.on { background: rgba(61, 255, 143, 0.16); border-color: rgba(61, 255, 143, 0.6); }
+  .rateRow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  #rate { flex: 1; accent-color: #3dff8f; height: 28px; }
+  #rateVal { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; }
+  #rateVal::after { content: ' bpm'; font-size: 12px; color: var(--dim); }
+  ol { margin: 6px 0 0; padding-left: 20px; color: var(--dim); line-height: 1.55; font-size: 14px; }
+  ol b { color: var(--ink); }
+  #foot { font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+  #saLabel {
+    position: fixed; pointer-events: none; font-size: 12px; letter-spacing: 0.08em; color: #8fe4ff;
+    text-shadow: 0 0 8px #000, 0 0 3px #000; transform: translate(-50%, -100%); white-space: nowrap;
+  }
+  #shout {
+    position: fixed; left: 0; right: 0; top: 40%; text-align: center; pointer-events: none;
+    font-size: clamp(42px, 7vw, 96px); font-weight: 900; letter-spacing: 0.12em; color: #fff;
+    text-shadow: 0 0 40px rgba(120, 180, 255, 0.9); opacity: 0; transition: opacity 0.25s;
+  }
+  #shout.on { opacity: 1; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 40px; font-size: 18px; background: #03050c; }
+
+  @media (orientation: portrait), (max-width: 820px) {
+    #layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr clamp(90px, 12vh, 130px) auto;
+      grid-template-areas: "title" "stage" "ecg" "panel";
+      padding-right: 16px; padding-left: 16px;
+    }
+    #panel { max-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="layout">
+  <div id="title">
+    <h1>Heart <b>Lab</b></h1>
+    <p>A live supercomputer-style simulation of the heart’s electrical wave</p>
+  </div>
+  <div id="stage"></div>
+  <div id="ecgWrap"><canvas id="ecg"></canvas><span id="ecgLabel">Simulated ECG · electrical activity</span></div>
+
+  <aside id="panel">
+    <div class="card">
+      <div class="lbl">Patient monitor</div>
+      <div id="rhythm">Normal heartbeat</div>
+      <div class="vitals">
+        <div><div class="lbl">Heart rate</div><div class="big" id="bpm">--<small>bpm</small></div></div>
+      </div>
+      <div id="arrest">
+        <div class="lbl">Time in cardiac arrest</div>
+        <div class="big" id="arrestTime">0:00</div>
+        <div class="lbl" style="margin-top:6px">Survival drops about 10% every minute without a shock</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Pacemaker speed</div>
+      <div class="rates">
+        <button data-bpm="50">😴 Sleeping</button>
+        <button data-bpm="72" class="on">🙂 Resting</button>
+        <button data-bpm="140">🏃 Exercising</button>
+      </div>
+      <div class="rateRow">
+        <input type="range" id="rate" min="40" max="160" step="1" value="72" aria-label="Heart rate">
+        <span id="rateVal">72</span>
+      </div>
+    </div>
+
+    <button id="defib">⚡ DEFIBRILLATE</button>
+
+    <div class="card" id="story"><h2 id="storyH"></h2><p id="storyP"></p></div>
+
+    <div class="tools">
+      <button id="trigger">Break the wave</button>
+      <button id="scar">✎ Draw scar</button>
+      <button id="reset">↺ Reset heart</button>
+      <button id="sound">🔊 Sound on</button>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Try it</div>
+      <ol>
+        <li><b>Tap the heart</b> to fire an extra beat. Tap right behind a wave and it can break.</li>
+        <li>Watch the <b>ECG</b> turn from regular spikes into chaos.</li>
+        <li>Press <b>DEFIBRILLATE</b> to bring the patient back.</li>
+        <li><b>Draw a scar</b> (like after a heart attack) and watch waves bend around it.</li>
+      </ol>
+    </div>
+
+    <div id="foot">
+      Aliev–Panfilov model of cardiac muscle, solved live on the GPU: 65,536 heart cells updated about 4,700 times a second.
+      The same kind of model computational scientists use to study arrhythmias and test treatments.
+      <a href="index.html" style="color:inherit;display:block;margin-top:8px">⌂ All demos</a>
+      <span id="fsLink" style="text-decoration:underline;cursor:pointer;display:block;margin-top:6px">Full screen ⛶</span>
+    </div>
+  </aside>
+</div>
+
+<div id="saLabel">● pacemaker (SA node)</div>
+<div id="shout"></div>
+<div id="err"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+
+/* ------------------------------------------------------------------
+   Model constants (tuned offline: spirals sustain inside the heart,
+   a normal wave crosses the heart in ~1/3 of a beat, one shock resets)
+------------------------------------------------------------------- */
+const S = 256;                 // grid: S x S cells
+const D = 8.0, DT = 0.028;     // diffusion, time step (D*DT < 0.25 for stability)
+const TU_PER_SEC = 132;        // simulation time units per real second
+const PACE = 110;              // pacemaker period in time units at 72 bpm (sets the bpm scale)
+let paceTU = PACE;             // current pacemaker period (changed by the heart-rate control)
+let targetBpm = 72;
+const SA = [0.32, 0.78];       // pacemaker location (uv)
+const ELEC = [0.62, 0.40];     // heart-rate electrode (uv)
+const SPIRAL_W = 18;           // width of the broken wave segment (cells)
+
+const canvas = $('gl');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+function fail(msg) { $('err').style.display = 'grid'; $('err').textContent = msg; throw new Error(msg); }
+if (!gl) fail('This device does not support WebGL2. Please open Heart Lab in an up-to-date Safari or Chrome.');
+if (!gl.getExtension('EXT_color_buffer_float')) fail('This GPU cannot render float textures (EXT_color_buffer_float). Try Chrome or Safari on a newer device.');
+
+/* ---------------- shaders ---------------- */
+const VS = `#version 300 es
+void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+
+const STEP_FS = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D S; uniform float D, dt;
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 c = texelFetch(S, p, 0);
+  if (c.b < 0.5) { o = c; return; }
+  float u = c.r, v = c.g;
+  vec4 l = texelFetch(S, p - ivec2(1,0), 0), r = texelFetch(S, p + ivec2(1,0), 0);
+  vec4 d = texelFetch(S, p - ivec2(0,1), 0), t = texelFetch(S, p + ivec2(0,1), 0);
+  float lap = (l.b > 0.5 ? l.r : u) + (r.b > 0.5 ? r.r : u) + (d.b > 0.5 ? d.r : u) + (t.b > 0.5 ? t.r : u) - 4.0 * u;
+  float du = D * lap - 8.0 * u * (u - 0.15) * (u - 1.0) - u * v;
+  float eps = 0.002 + 0.2 * v / (u + 0.3);
+  float dv = eps * (-v - 8.0 * u * (u - 1.15));
+  o = vec4(clamp(u + dt * du, -0.1, 1.2), v + dt * dv, c.b, c.a);
+}`;
+
+const EDIT_FS = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D S;
+uniform vec3 stims[4]; uniform int nStim;
+uniform vec4 seg; uniform vec2 brush;      // scar brush: segment + (radius, on)
+uniform float defib; uniform vec3 spiral;  // (x, y, width) width>0 = trigger
+out vec4 o;
+float segDist(vec2 p, vec2 a, vec2 b){ vec2 ab = b - a; float h = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0); return length(p - a - ab * h); }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy); vec4 c = texelFetch(S, p, 0); vec2 q = vec2(p) + 0.5;
+  if (c.a > 0.5) {
+    if (brush.y > 0.5 && segDist(q, seg.xy, seg.zw) < brush.x) { c.r = 0.0; c.g = 0.0; c.b = 0.0; }
+    if (c.b > 0.5) {
+      for (int i = 0; i < 4; i++) { if (i >= nStim) break; if (distance(q, stims[i].xy) < stims[i].z) c.r = 1.0; }
+      if (defib > 0.5) c.r = 1.0;
+      if (spiral.z > 0.0 && q.y > spiral.y) {
+        if (q.x > spiral.x - spiral.z && q.x <= spiral.x) { c.r = 1.0; c.g = 0.0; }
+        else if (q.x > spiral.x && q.x < spiral.x + 3.0 * spiral.z) { c.r = 0.0; c.g = 2.0; }
+      }
+    }
+  }
+  o = c;
+}`;
+
+const PROBE_FS = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D S; uniform vec2 elec; uniform float N;
+out vec4 o;
+vec4 enc(float x){ x = clamp(x, 0.0, 0.99998); return vec4(floor(x * 255.0) / 255.0, fract(x * 255.0), 0.0, 1.0); }
+void main(){
+  if (int(gl_FragCoord.x) == 0) {
+    float s = 0.0, n = 0.0;
+    for (int j = 0; j < 48; j++) for (int i = 0; i < 48; i++) {
+      vec4 c = texelFetch(S, ivec2((vec2(i, j) + 0.5) * N / 48.0), 0);
+      if (c.b > 0.5) { s += c.r; n += 1.0; }
+    }
+    o = enc(n > 0.0 ? s / n : 0.0);
+  } else {
+    o = enc(texelFetch(S, ivec2(elec), 0).r);
+  }
+}`;
+
+const DISPLAY_FS = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D S;
+uniform vec3 rect; uniform vec2 res; uniform float N, flash, dpr, time, saGlow; uniform vec2 sa;
+out vec4 o;
+vec4 T(ivec2 p){ return texelFetch(S, clamp(p, ivec2(0), ivec2(int(N) - 1)), 0); }
+vec4 bil(vec2 uv){
+  vec2 t = uv * N - 0.5; vec2 f = fract(t); ivec2 i = ivec2(floor(t));
+  return mix(mix(T(i), T(i + ivec2(1,0)), f.x), mix(T(i + ivec2(0,1)), T(i + ivec2(1,1)), f.x), f.y);
+}
+float heartF(vec2 uv){ vec2 q = (uv - 0.5) * 2.6; q.y += 0.12; float t = dot(q, q) - 1.0; return t*t*t - q.x*q.x*q.y*q.y*q.y; }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
+vec3 ramp(float u){
+  u = clamp(u, 0.0, 1.0);
+  vec3 c0 = vec3(0.30, 0.025, 0.055), c1 = vec3(0.85, 0.07, 0.10), c2 = vec3(1.0, 0.32, 0.06), c3 = vec3(1.0, 0.58, 0.16);
+  return u < 0.3 ? mix(c0, c1, u / 0.3) : (u < 0.7 ? mix(c1, c2, (u - 0.3) / 0.4) : mix(c2, c3, (u - 0.7) / 0.3));
+}
+void main(){
+  vec2 fc = gl_FragCoord.xy, sp = fc / res;
+  vec2 uv = (fc - rect.xy) / rect.z;
+
+  // background: deep clinical blue, faint grid, vignette
+  vec3 col = mix(vec3(0.012, 0.016, 0.04), vec3(0.035, 0.045, 0.095), 1.0 - clamp(length(sp - vec2(0.4, 0.55)) * 1.3, 0.0, 1.0));
+  vec2 g = abs(fract(fc / (44.0 * dpr)) - 0.5);
+  col += 0.018 * step(0.5 - 0.6 / 44.0, max(g.x, g.y));
+
+  // glow halo from excited tissue (reaches outside the heart)
+  float glow = 0.0;
+  for (int k = 0; k < 12; k++) {
+    float a = float(k) * 0.5236 + 0.26;
+    vec2 dir = vec2(cos(a), sin(a));
+    glow += T(ivec2((uv + dir * 6.0 / N) * N)).r + T(ivec2((uv + dir * 15.0 / N) * N)).r * 0.7;
+  }
+  glow = max(glow, 0.0) / 20.0;
+
+  if (uv.x > -0.05 && uv.x < 1.05 && uv.y > -0.05 && uv.y < 1.05) {
+    float e = 1.0 / rect.z;
+    float f = heartF(uv);
+    vec2 grad = vec2(heartF(uv + vec2(e, 0)) - heartF(uv - vec2(e, 0)), heartF(uv + vec2(0, e)) - heartF(uv - vec2(0, e))) / (2.0 * e);
+    float dist = f / max(length(grad), 1e-5);           // ~signed distance to the heart edge (uv units)
+    float inside = 1.0 - smoothstep(-1.2 * e, 1.2 * e, dist);
+
+    if (inside > 0.0) {
+      vec4 s = bil(uv);
+      float h = 1.5 / N;
+      float ux = bil(uv + vec2(h, 0)).r - bil(uv - vec2(h, 0)).r;
+      float uy = bil(uv + vec2(0, h)).r - bil(uv - vec2(0, h)).r;
+      float u = s.r, v = s.g, tissue = 1.0 - smoothstep(0.2, 0.8, s.a - s.b);
+      float front = smoothstep(0.08, 0.45, length(vec2(ux, uy)));   // the travelling wavefront
+
+      // pillow-shaped 3D heart + ridges where the wavefront is
+      float depth = clamp(-dist / 0.13, 0.0, 1.0);
+      vec2 nxy = normalize(grad) * pow(1.0 - depth, 2.0) * 1.1 - vec2(ux, uy) * 2.2;
+      vec3 n = normalize(vec3(nxy, 1.0));
+
+      // muscle fibres
+      float ang = 0.7 + 1.4 * uv.y;
+      mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+      float fib = noise(R * uv * vec2(320.0, 26.0)) * 0.6 + noise(uv * 60.0) * 0.4;
+
+      vec3 tc = ramp(u) * (0.78 + 0.42 * fib * (1.0 - 0.7 * clamp(u, 0.0, 1.0)));
+      tc += vec3(0.28, 0.20, 0.95) * smoothstep(0.35, 1.7, v) * (1.0 - clamp(u, 0.0, 1.0)) * 0.42;   // recovering tissue
+      tc += vec3(1.0, 0.92, 0.7) * front * 0.9;                                                      // white-hot leading edge
+      vec3 scarC = vec3(0.62, 0.58, 0.60) * (0.65 + 0.5 * noise(uv * 110.0));
+      tc = mix(scarC, tc, tissue);
+
+      vec3 L = normalize(vec3(-0.45, 0.6, 0.68));
+      float dif = 0.62 + 0.48 * max(dot(n, L), 0.0);
+      float spec = pow(max(dot(reflect(-L, n), vec3(0, 0, 1)), 0.0), 42.0) * (0.25 + 0.9 * clamp(u, 0.0, 1.0));
+      vec3 hc = tc * dif + spec * vec3(1.0, 0.92, 0.88);
+      hc *= 0.82 + 0.18 * depth;                                                   // edge falloff for volume
+      hc += vec3(1.0, 0.3, 0.35) * 0.22 * (1.0 - smoothstep(0.0, 0.035, -dist)); // rim light
+
+      // pacemaker beacon
+      float sd = length((uv - sa) * rect.z) / dpr;
+      hc += vec3(0.45, 0.85, 1.0) * (exp(-sd * sd / 18.0) * (0.6 + 1.6 * saGlow) + exp(-sd / 14.0) * 0.5 * saGlow);
+
+      col = mix(col, hc, inside);
+    }
+  }
+  col += vec3(1.0, 0.38, 0.1) * glow * 0.6;
+  col += vec3(0.75, 0.85, 1.0) * flash;
+  col *= 1.0 - 0.35 * pow(length(sp - 0.5) * 1.25, 2.5);
+  col = 1.0 - exp(-col * 1.35);   // filmic tone map
+  o = vec4(col, 1.0);
+}`;
+
+function program(fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail('Shader error: ' + gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail('Link error: ' + gl.getProgramInfoLog(p));
+  const cache = {};
+  p.u = (name) => (name in cache ? cache[name] : (cache[name] = gl.getUniformLocation(p, name)));
+  return p;
+}
+const P = { step: program(STEP_FS), edit: program(EDIT_FS), probe: program(PROBE_FS), display: program(DISPLAY_FS) };
+gl.bindVertexArray(gl.createVertexArray());
+
+/* ---------------- state textures (ping-pong) ---------------- */
+function heartF(x, y) { const qx = (x - 0.5) * 2.6, qy = (y - 0.5) * 2.6 + 0.12, t = qx * qx + qy * qy - 1; return t * t * t - qx * qx * qy * qy * qy; }
+const initData = new Float32Array(S * S * 4);
+for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+  const inside = heartF((x + 0.5) / S, (y + 0.5) / S) < 0 ? 1 : 0;
+  initData[(y * S + x) * 4 + 2] = inside; initData[(y * S + x) * 4 + 3] = inside;
+}
+function makeTarget(w, h, internal, format, type, data, filter) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, data);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) fail('Could not create a float render target on this GPU.');
+  return { t, f };
+}
+const state = [0, 1].map(() => makeTarget(S, S, gl.RGBA32F, gl.RGBA, gl.FLOAT, initData, gl.NEAREST));
+const probeT = makeTarget(2, 1, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, null, gl.NEAREST);
+let cur = 0;
+function resetTissue() {
+  for (const s of state) { gl.bindTexture(gl.TEXTURE_2D, s.t); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, S, S, gl.RGBA, gl.FLOAT, initData); }
+}
+
+function pass(prog, setUniforms) {
+  gl.useProgram(prog);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, state[cur].t);
+  gl.uniform1i(prog.u('S'), 0);
+  setUniforms && setUniforms(prog);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, state[1 - cur].f);
+  gl.viewport(0, 0, S, S);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  cur = 1 - cur;
+}
+
+/* ---------------- layout / coordinates ---------------- */
+let dpr = Math.min(devicePixelRatio || 1, 2), view = { x: 0, y: 0, size: 100 };
+function resize() {
+  canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+  const r = $('ecg').getBoundingClientRect(), ed = Math.min(devicePixelRatio || 1, 2);
+  $('ecg').width = Math.round(r.width * ed); $('ecg').height = Math.round(r.height * ed);
+  ecg.ctx.setTransform(ed, 0, 0, ed, 0, 0); ecg.w = r.width; ecg.h = r.height; ecg.x = 0; ecg.prevY = null;
+  ecg.ctx.clearRect(0, 0, ecg.w, ecg.h);
+}
+function computeView(squeeze) {
+  const r = $('stage').getBoundingClientRect();
+  const base = Math.max(50, Math.min(r.width, r.height) * 1.02);
+  const size = base * (1 - squeeze);
+  view = { x: r.left + (r.width - size) / 2, y: r.top + (r.height - size) / 2, size };
+}
+const toUV = (cx, cy) => [(cx - view.x) / view.size, 1 - (cy - view.y) / view.size];
+const insideHeart = (uv) => heartF(uv[0], uv[1]) < 0;
+
+/* ---------------- sound ---------------- */
+let ac = null, soundOn = true;
+function audio() { try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { ac = null; } }
+function tone(freq, dur, vol, type = 'sine', freqEnd) {
+  if (!ac || !soundOn) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.05);
+}
+
+/* ---------------- ECG strip ---------------- */
+const ecg = { ctx: $('ecg').getContext('2d'), w: 0, h: 0, x: 0, prevY: null, smooth: 0 };
+function drawEcg(val, color) {
+  const c = ecg.ctx, speed = Math.max(1.5, ecg.w / 360);   // ~6 s across the strip
+  const y = ecg.h * 0.58 - val * ecg.h * 0.42;
+  c.clearRect(ecg.x + 1, 0, 18, ecg.h);
+  if (ecg.prevY !== null) {
+    c.strokeStyle = color; c.lineWidth = 2.2; c.lineJoin = 'round'; c.shadowColor = color; c.shadowBlur = 10;
+    c.beginPath(); c.moveTo(ecg.x, ecg.prevY); c.lineTo(ecg.x + speed, y); c.stroke();
+  }
+  ecg.x += speed; ecg.prevY = y;
+  if (ecg.x > ecg.w) { ecg.x = 0; ecg.prevY = null; }
+}
+
+/* ---------------- interaction state ---------------- */
+const pending = { stims: [], seg: null, defib: false, spiral: false };
+let scarMode = false, lastInteract = performance.now(), dragLast = null;
+
+canvas.addEventListener('pointerdown', (e) => {
+  audio(); lastInteract = performance.now();
+  const uv = toUV(e.clientX, e.clientY);
+  if (!insideHeart(uv)) return;
+  if (scarMode) { dragLast = uv; pending.seg = [uv, uv]; canvas.setPointerCapture(e.pointerId); }
+  else if (pending.stims.length < 3) { pending.stims.push([uv[0] * S, uv[1] * S, 9]); tone(520, 0.12, 0.12, 'triangle'); }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!scarMode || !dragLast) return;
+  const uv = toUV(e.clientX, e.clientY);
+  pending.seg = [pending.seg ? pending.seg[0] : dragLast, uv]; dragLast = uv;
+});
+const endDrag = () => { dragLast = null; };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+
+let charging = false, shockedAt = -1e9, flash = 0;
+function shout(text, ms) { $('shout').textContent = text; $('shout').classList.add('on'); clearTimeout(shout.t); shout.t = setTimeout(() => $('shout').classList.remove('on'), ms); }
+function defibrillate() {
+  if (charging) return;
+  audio(); lastInteract = performance.now(); charging = true;
+  $('defib').classList.add('charging'); $('defib').textContent = 'CHARGING…';
+  tone(220, 1.1, 0.08, 'sawtooth', 1900);
+  setTimeout(() => {
+    shout('CLEAR!', 600);
+    setTimeout(() => {
+      pending.defib = true; flash = 1.0; shockedAt = performance.now();
+      tone(70, 0.45, 0.5, 'sine', 35); tone(140, 0.2, 0.25, 'square', 60);
+      document.body.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-8px,4px)' }, { transform: 'translate(6px,-5px)' }, { transform: 'translate(0,0)' }], { duration: 260 });
+      charging = false; $('defib').classList.remove('charging'); $('defib').textContent = '⚡ DEFIBRILLATE';
+    }, 450);
+  }, 1100);
+}
+$('defib').addEventListener('click', defibrillate);
+$('trigger').addEventListener('click', () => { audio(); lastInteract = performance.now(); pending.spiral = true; tone(300, 0.25, 0.12, 'square', 180); });
+$('scar').addEventListener('click', () => { scarMode = !scarMode; $('scar').classList.toggle('on', scarMode); $('scar').textContent = scarMode ? '✎ Drawing… (tap to stop)' : '✎ Draw scar'; });
+$('reset').addEventListener('click', () => { lastInteract = performance.now(); resetTissue(); beats.length = 0; lastBeatTU = -1e9; vfSince = null; });
+function setRate(bpm) {
+  targetBpm = bpm; paceTU = PACE * 72 / bpm;
+  paceTimer = Math.min(paceTimer, paceTU);
+  $('rate').value = bpm; $('rateVal').textContent = bpm;
+  document.querySelectorAll('.rates button').forEach((b) => b.classList.toggle('on', +b.dataset.bpm === bpm));
+  lastInteract = performance.now(); rateChangedAt = performance.now();
+  setStory(bpm < 60 ? 'slow' : bpm > 100 ? 'fast' : 'normal');
+}
+let rateChangedAt = -1e9;
+document.querySelectorAll('.rates button').forEach((b) => b.addEventListener('click', () => { audio(); setRate(+b.dataset.bpm); }));
+$('rate').addEventListener('input', (e) => setRate(+e.target.value));
+$('sound').addEventListener('click', () => { audio(); soundOn = !soundOn; $('sound').textContent = soundOn ? '🔊 Sound on' : '🔇 Sound off'; });
+$('fsLink').addEventListener('click', () => {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+});
+addEventListener('resize', resize);
+
+/* ---------------- rhythm analysis ---------------- */
+const beats = [];                 // intervals (TU) between upstrokes at the electrode
+let simTU = 0, paceTimer = 0, lastBeatTU = -1e9, prevElec = 0, prevMean = 0, meanSmooth = 0, saGlow = 0;
+let vfSince = null, lastAlarm = 0, rhythm = 'normal';
+
+const STORY = {
+  slow: ['Slow heartbeat', 'While you sleep, your nervous system tells the pacemaker to <b>slow down</b> (50–60 bpm), because your body needs less oxygen. Athletes can rest even lower because their heart pumps more blood per beat.'],
+  fast: ['Fast heartbeat', 'During exercise, <b>adrenaline</b> speeds up the pacemaker so the heart pumps more oxygen to your muscles. Notice the waves come closer together, but each one still travels cleanly. That’s a <b>healthy</b> fast rhythm, not fibrillation.'],
+  normal: ['Normal heartbeat', 'A tiny cluster of <b>pacemaker cells</b> fires about 60–100 times a minute. Each pulse spreads as an <b>electrical wave</b>; when the wave reaches the muscle, it squeezes and pumps blood. Bright = firing, violet = recovering.'],
+  extra: ['Extra beat', 'You fired an <b>extra beat</b>. Usually the heart shrugs it off. But if it lands right as tissue is recovering, the wave can <b>break</b>…'],
+  vf: ['Cardiac arrest!', 'The wave broke and curled into <b>spirals</b> that chase their own tails. The muscle <b>quivers instead of pumping</b>. This is ventricular fibrillation. A tiny change caused a huge effect: the <b>butterfly effect</b> inside your chest. Quick, <b>DEFIBRILLATE!</b>'],
+  shock: ['Shock delivered', 'The shock fires <b>every cell at once</b>, so the spirals have nowhere left to go. Then the pacemaker takes back control. That’s why <b>AEDs and CPR</b> save lives, and why everyone should learn them.'],
+  scar: ['Heart-attack scar', 'After a heart attack, dead muscle becomes <b>scar</b> that can’t carry the signal. Waves must detour around it, and scars make dangerous rhythms <b>more likely</b>. Doctors use simulations like this to plan treatments.'],
+};
+let storyKey = '';
+function setStory(k) { if (k === storyKey) return; storyKey = k; $('storyH').textContent = STORY[k][0]; $('storyP').innerHTML = STORY[k][1]; }
+
+/* ---------------- main loop ---------------- */
+const pix = new Uint8Array(8);
+const stimBuf = new Float32Array(12);
+let lastT = performance.now(), frameAvg = 16, slowFor = 0, lastAuto = 0;
+
+function frame(now) {
+  const dtReal = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  frameAvg = frameAvg * 0.95 + dtReal * 1000 * 0.05;
+  if (frameAvg > 26 && dpr > 1) { if ((slowFor += dtReal) > 2) { dpr = Math.max(1, dpr - 0.25); resize(); slowFor = 0; } } else slowFor = 0;
+
+  const tuFrame = TU_PER_SEC * dtReal;
+  const steps = Math.max(1, Math.min(120, Math.round(tuFrame / DT)));
+
+  // pacemaker
+  paceTimer -= steps * DT;
+  if (paceTimer <= 0) { paceTimer = Math.max(paceTimer + paceTU, 0); pending.stims.push([SA[0] * S, SA[1] * S, 6]); saGlow = 1; }
+  saGlow *= 0.9;
+
+  // apply edits (stimuli, scar brush, defibrillation, broken wave)
+  if (pending.stims.length || pending.seg || pending.defib || pending.spiral) {
+    const st = pending.stims.slice(0, 4); stimBuf.fill(0); st.forEach((s, i) => stimBuf.set(s, i * 3));
+    const seg = pending.seg;
+    pass(P.edit, (p) => {
+      gl.uniform3fv(p.u('stims'), stimBuf); gl.uniform1i(p.u('nStim'), st.length);
+      gl.uniform4f(p.u('seg'), ...(seg ? [seg[0][0] * S, seg[0][1] * S, seg[1][0] * S, seg[1][1] * S] : [0, 0, 0, 0]));
+      gl.uniform2f(p.u('brush'), 7, seg ? 1 : 0);
+      gl.uniform1f(p.u('defib'), pending.defib ? 1 : 0);
+      gl.uniform3f(p.u('spiral'), S * 0.5, S * 0.5, pending.spiral ? SPIRAL_W : 0);
+    });
+    if (st.some((s) => s[2] === 9)) setStory('extra');
+    if (seg) setStory('scar');
+    pending.stims = []; pending.seg = dragLast ? [dragLast, dragLast] : null; pending.defib = false; pending.spiral = false;
+  }
+
+  // physics
+  for (let i = 0; i < steps; i++) pass(P.step, (p) => { gl.uniform1f(p.u('D'), D); gl.uniform1f(p.u('dt'), DT); });
+  simTU += steps * DT;
+
+  // probe: mean activation + electrode
+  gl.useProgram(P.probe);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, state[cur].t);
+  gl.uniform1i(P.probe.u('S'), 0); gl.uniform1f(P.probe.u('N'), S); gl.uniform2f(P.probe.u('elec'), ELEC[0] * S, ELEC[1] * S);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, probeT.f); gl.viewport(0, 0, 2, 1); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, pix);
+  const mean = (pix[0] + pix[1] / 255) / 255, elec = (pix[4] + pix[5] / 255) / 255;
+
+  // heartbeat detection
+  if (elec > 0.5 && prevElec <= 0.5) {
+    if (lastBeatTU > -1e8) { beats.push(simTU - lastBeatTU); if (beats.length > 6) beats.shift(); }
+    lastBeatTU = simTU;
+    if (rhythm !== 'vf') tone(980, 0.07, 0.1);
+  }
+  prevElec = elec;
+  const recent = beats.slice(-3);
+  const silent = simTU > 2.5 * paceTU && simTU - lastBeatTU > 2.5 * paceTU;
+  const fast = recent.length >= 2 && recent.slice(-2).every((b) => b < 0.8 * paceTU);
+  rhythm = silent ? 'none' : fast ? 'vf' : 'normal';
+
+  // ECG
+  const d = (mean - prevMean) / Math.max(1e-3, steps * DT); prevMean = mean;
+  ecg.smooth = ecg.smooth * 0.55 + d * 0.45;
+  drawEcg(Math.max(-1.2, Math.min(1.25, ecg.smooth * 34)), rhythm === 'vf' ? '#ff5468' : '#3dff8f');
+
+  // monitor + story
+  const sinceShock = now - shockedAt;
+  if (rhythm === 'vf') {
+    if (vfSince === null) vfSince = now;
+    $('rhythm').textContent = 'VENTRICULAR FIBRILLATION'; $('rhythm').className = 'bad';
+    if (sinceShock > 3000) setStory('vf');
+    if (now - lastAlarm > 650) { lastAlarm = now; tone(Math.floor(now / 650) % 2 ? 1046 : 784, 0.28, 0.09, 'square'); }
+  } else {
+    vfSince = null;
+    if (rhythm === 'none') { $('rhythm').textContent = 'No heartbeat detected'; $('rhythm').className = 'warn'; }
+    else { $('rhythm').textContent = 'Normal heartbeat'; $('rhythm').className = ''; }
+    if (sinceShock < 6000) setStory('shock');
+    else if (storyKey === 'vf' || storyKey === 'shock' || (storyKey === 'extra' && now - lastInteract > 5000))
+      setStory(targetBpm < 60 ? 'slow' : targetBpm > 100 ? 'fast' : 'normal');
+  }
+  if (recent.length && !silent) {
+    const med = [...recent].sort((a, b) => a - b)[Math.floor(recent.length / 2)];
+    $('bpm').innerHTML = Math.round(72 * PACE / med) + '<small>bpm</small>';
+  } else $('bpm').innerHTML = '--<small>bpm</small>';
+  $('arrest').style.display = vfSince !== null ? 'block' : 'none';
+  if (vfSince !== null) {
+    const s = Math.floor((now - vfSince) / 1000);
+    $('arrestTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  // attract mode for when nobody is touching it
+  if (now - lastInteract > 40000 && now - lastAuto > 15000) {
+    lastAuto = now;
+    if (rhythm === 'vf') defibrillate(); else pending.spiral = true;
+  }
+
+  // render
+  meanSmooth = meanSmooth * 0.85 + Math.max(0, mean) * 0.15;
+  computeView(0.05 * meanSmooth);                       // the heart physically squeezes when it fires
+  flash *= 0.86;
+  gl.useProgram(P.display);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, state[cur].t);
+  gl.uniform1i(P.display.u('S'), 0);
+  gl.uniform3f(P.display.u('rect'), view.x * dpr, (innerHeight - view.y - view.size) * dpr, view.size * dpr);
+  gl.uniform2f(P.display.u('res'), canvas.width, canvas.height);
+  gl.uniform1f(P.display.u('N'), S); gl.uniform1f(P.display.u('flash'), flash);
+  gl.uniform1f(P.display.u('dpr'), dpr); gl.uniform1f(P.display.u('time'), now / 1000);
+  gl.uniform1f(P.display.u('saGlow'), saGlow); gl.uniform2f(P.display.u('sa'), SA[0], SA[1]);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  const lab = $('saLabel').style;
+  lab.left = (view.x + SA[0] * view.size) + 'px'; lab.top = (view.y + (1 - SA[1]) * view.size - 14) + 'px';
+
+  requestAnimationFrame(frame);
+}
+
+resize(); setStory('normal');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
